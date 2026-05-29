@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ログイン - ミーティング議事録Lite</title>
+    <!-- 正しいTailwind CSS v4の読み込み -->
+    <!-- <script src="https://unpkg.com/@tailwindcss/browser@4"></script> -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+</head>
+<body class="bg-blue-50 min-h-screen flex items-center justify-center p-6 font-sans">
+
+    <div class="max-w-md w-full bg-white rounded-lg shadow-md p-8 border border-gray-100">
+        <h1 class="text-xl font-bold mb-2 text-gray-800 text-center flex items-center justify-center gap-2">
+            🎙️ ミーティング議事録Lite
+        </h1>
+        <p class="text-xs text-gray-500 text-center mb-6">ポートフォリオ用デモアプリケーション</p>
+
+        <!-- ⚠️ エラーメッセージ表示エリア (Flaskのflashに対応) -->
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            <div class="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 text-xs rounded">
+              {% for message in messages %}
+                <p>{{ message }}</p>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        <!-- ログインフォーム -->
+        <form action="/login" method="POST" class="space-y-4">
+            <div>
+                <label class="block text-xs font-bold text-gray-600 mb-1" for="username">ユーザー名</label>
+                <input type="text" id="username" name="username" required placeholder="ユーザー名を入力"
+                       class="w-full p-2.5 border border-gray-300 rounded text-sm focus:outline-blue-500">
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-gray-600 mb-1" for="password">パスワード</label>
+                <input type="password" id="password" name="password" required placeholder="パスワードを入力"
+                       class="w-full p-2.5 border border-gray-300 rounded text-sm focus:outline-blue-500">
+            </div>
+
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded text-sm transition shadow-sm">
+                ログイン
+            </button>
+        </form>
+
+        <!-- 💡 採用担当者向けの「かんたんログイン」機能 -->
+        <div class="mt-6 pt-6 border-t border-gray-100 bg-gray-50 p-4 rounded-lg">
+            <p class="text-xs font-bold text-gray-700 mb-2 flex items-center gap-1">
+                💡 採用ご担当者様へ
+            </p>
+            <p class="text-xs text-gray-600 mb-3 leading-relaxed">
+                以下のボタンを押すと、自動作成されたデモ用アカウントの認証情報が入力され、すぐにお試しいただけます。
+            </p>
+            <button id="demoLoginBtn" class="w-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold py-2 px-3 rounded transition shadow-xs">
+                デモ情報を自動入力する
+            </button>
+        </div>
+    </div>
+
+    <!-- JavaScript：デモアカウント情報の自動入力ロジック -->
+    <script>
+        document.getElementById('demoLoginBtn').addEventListener('click', () => {
+            document.getElementById('username').value = 'admin';
+            document.getElementById('password').value = 'password123';
+        });
+    </script>
+</body>
+</html>

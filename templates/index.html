@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ミーティング議事録Lite</title>
+    <!-- 正しいTailwind CSS v4の読み込み -->
+    <!-- <script src="https://unpkg.com/@tailwindcss/browser@4"></script> -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+
+<body class="bg-blue-50 min-h-screen p-4 md:p-6 font-sans">
+
+    <!-- 🌐 ヘッダーエリア（ログアウトボタンを配置） -->
+    <header
+        class="max-w-5xl mx-auto flex justify-between items-center mb-6 bg-white p-4 rounded-lg shadow-xs border border-gray-100">
+        <h1 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+            🎙️ ミーティング議事録Lite
+        </h1>
+        <div class="flex items-center gap-3">
+            <span class="text-xs text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full">
+                👤 ユーザー: <strong>{{ current_user.username }}</strong>
+            </span>
+            <a href="/logout"
+                class="text-xs bg-red-50 hover:bg-red-100 text-red-600 font-bold py-1.5 px-3 rounded border border-red-200 transition">
+                ログアウト
+            </a>
+        </div>
+    </header>
+
+    <!-- 📦 メインコンテンツ（2カラム構成） -->
+    <main class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
+
+        <!-- 📜 左側カラム：過去の議事録履歴 (1カラム分) -->
+        <div class="bg-white rounded-lg shadow-md p-4 border border-gray-100 h-[600px] flex flex-col">
+            <h2 class="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1 border-b border-gray-100 pb-2">
+                📋 過去の議事録履歴 ({{ minutes|length }}件)
+            </h2>
+            <div class="overflow-y-auto flex-1 space-y-2 pr-1" id="historyList">
+                {% if minutes %}
+                {% for item in minutes %}
+                <button
+                    class="w-full text-left p-3 rounded-lg border border-gray-200 hover:bg-blue-50/50 hover:border-blue-300 transition text-xs block group"
+                    onclick="showHistoryModal('{{ item.title|e }}', '{{ item.created_at.strftime('%Y/%m/%d %H:%M') }}', `{{ item.summary|e }}`, `{{ item.transcript|e }}`)">
+                    <div class="font-bold text-gray-800 truncate group-hover:text-blue-600">{{ item.title }}</div>
+                    <div class="text-gray-400 mt-1 text-[10px]">{{ item.created_at.strftime('%Y/%m/%d %H:%M') }}</div>
+                </button>
+                {% endfor %}
+                {% else %}
+                <p class="text-gray-400 text-xs text-center pt-8">履歴はまだありません</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- 🎙️ 右側カラム：メイン操作エリア (2カラム分) -->
+        <div
+            class="md:col-span-2 bg-white rounded-lg shadow-md p-6 border border-gray-100 flex flex-col justify-between h-[600px]">
+            <div>
+                <!-- 1. 新規セッション開始 -->
+                <section class="mb-4">
+                    <h2 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">1. 新規セッション開始</h2>
+                    <input type="text" id="sessionTitle" placeholder="セッション・タイトル：例. 定例ミーティング"
+                        class="w-full p-2 border border-gray-300 rounded text-sm focus:outline-blue-500">
+
+                    <div class="flex gap-2 mt-2">
+                        <button id="startBtn"
+                            class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-4 rounded transition shadow-xs">
+                            録音開始 (マイク)
+                        </button>
+                        <button id="stopBtn"
+                            class="bg-gray-500 hover:bg-gray-600 text-white text-xs font-bold py-2 px-4 rounded transition hidden shadow-xs">
+                            録音停止
+                        </button>
+                    </div>
+                </section>
+
+                <!-- 2. ライブ文字起こし -->
+                <section class="mb-4">
+                    <h2
+                        class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex justify-between items-center">
+                        <span>2. ライブ文字起こし</span>
+                        <span id="statusBadge"
+                            class="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-sm">停止中</span>
+                    </h2>
+                    <textarea id="transcriptArea"
+                        class="w-full h-32 p-3 border border-gray-300 rounded text-xs bg-gray-50 resize-none focus:outline-none"
+                        readonly></textarea>
+                </section>
+            </div>
+
+            <!-- 3. クイック議事録生成（下部に固定配置） -->
+            <section class="border-t border-gray-100 pt-4">
+                <h2 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">3. クイック議事録生成</h2>
+                <button id="generateBtn"
+                    class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded text-xs transition shadow-xs">
+                    議事録を生成して履歴に保存
+                </button>
+
+                <div id="summaryResult"
+                    class="mt-3 p-4 bg-amber-50 border border-amber-200 rounded text-xs text-gray-800 h-40 overflow-y-auto whitespace-pre-wrap hidden">
+                    <!-- 生成結果 -->
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- 🔍 履歴詳細確認用のモーダルウィンドウ（初期状態は非表示） -->
+    <div id="historyModal"
+        class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 hidden z-50 animate-fade-in">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[85vh] flex flex-col">
+            <div class="flex justify-between items-start border-b border-gray-100 pb-3 mb-4">
+                <div>
+                    <h3 id="modalTitle" class="text-base font-bold text-gray-800"></h3>
+                    <p id="modalDate" class="text-[10px] text-gray-400 mt-0.5"></p>
+                </div>
+                <button onclick="closeHistoryModal()"
+                    class="text-gray-400 hover:text-gray-600 font-bold text-lg px-2">&times;</button>
+            </div>
+
+            <div class="overflow-y-auto flex-1 space-y-4 text-xs pr-1">
+                <div>
+                    <h4 class="font-bold text-blue-600 mb-1">✨ AI生成議事録</h4>
+                    <div id="modalSummary"
+                        class="bg-amber-50 p-3 rounded border border-amber-100 whitespace-pre-wrap text-gray-800"></div>
+                </div>
+                <div>
+                    <h4 class="font-bold text-gray-500 mb-1">📝 文字起こし原文</h4>
+                    <div id="modalTranscript"
+                        class="bg-gray-50 p-3 rounded border border-gray-200 whitespace-pre-wrap text-gray-600 max-h-40 overflow-y-auto">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScriptロジック -->
+    <!-- <script src="/static/js/main.js"></script> -->
+     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
