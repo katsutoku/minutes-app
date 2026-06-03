@@ -236,3 +236,46 @@ function appendChatMessage(sender, text) {
     return uniqueId; // ローディング消去用にIDを返す
 }
 
+//  アドバイスモード（自動チェック）のボタン制御
+const adviceBtn = document.getElementById('adviceBtn');
+const meetingGoal = document.getElementById('meetingGoal');
+
+adviceBtn.addEventListener('click', async () => {
+    const transcript = transcriptArea.value.trim();
+    const goal = meetingGoal.value.trim() || '一般的なビジネス交渉';
+
+    if (!transcript) {
+        alert('まだ文字起こしされたテキストがありません。会議が始まってからチェックしてください。');
+        return;
+    }
+
+    adviceBtn.textContent = '先輩がログを鋭く分析中...';
+    adviceBtn.disabled = true;
+    appendChatMessage('ai', '（現在の議論のチェックを開始しました...）');
+
+    try {
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: '',  // 空文字を渡すことでバックエンド側で自動診断モードを起動
+                transcript: transcript,
+                goal: goal,
+                type: document.getElementById('meetingType').value,
+                participants: document.getElementById('meetingParticipants').value || '未入力'
+            })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            appendChatMessage('ai', '👨‍💼 先輩からの助言:\n' + data.reply);
+        } else {
+            appendChatMessage('ai', 'チェックエラー: ' + data.error);
+        }
+    } catch (error) {
+        appendChatMessage('ai', '通信エラーが発生しました。');
+    } finally {
+        adviceBtn.textContent = '🚨 先輩に現在の進行状況をチェックしてもらう（アドバイスモード）';
+        adviceBtn.disabled = false;
+    }
+});

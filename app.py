@@ -182,43 +182,52 @@ with app.app_context():
 # ----------------------------------------------------
 #  ルーティング（AIアドバイザーチャット：ログイン必須）
 # ----------------------------------------------------
-@app.route("/api/chat", methods=["POST"])
+@app.route('/api/chat', methods=['POST'])
 @login_required
 def ai_chat():
     data = request.json
-    user_message = data.get("message", "")  # ユーザーからの質問
-    transcript = data.get("transcript", "")  # 現在の文字起こし本文
+    user_message = data.get('message', '')
+    transcript = data.get('transcript', '')
+    meeting_goal = data.get('goal', '一般的なビジネス交渉')
+    
+    # 💡 新しくフロントから送られてくる情報をキャッチ
+    meeting_type = data.get('type', '対外打ち合わせ')
+    participants = data.get('participants', '関係者一同')
 
-    if not user_message:
-        return jsonify({"error": "メッセージが空です"}), 400
-
-    # 文字起こしが空の場合のコンテキスト分岐処理
-    context_info = (
-        f"現在の会議の文字起こし内容:\n{transcript}"
-        if transcript
-        else "現在、会議の文字起こしデータはありません。一般的なビジネスアドバイスを行ってください。"
+    # 💡 完璧な前提条件（文脈）を構築してGeminiに送る
+    prompt = (
+        f"【会議の基本前提】\n"
+        f"・会議の種類: {meeting_type}\n"
+        f"・参加者構成: {participants}\n"
+        f"・この会議の目的・ゴール: {meeting_goal}\n\n"
+        f"【現在のリアルタイム文字起こしログ】\n{transcript}\n\n"
     )
-
+    
+    if user_message:
+        prompt += f"【後輩からの個別の質問】\n{user_message}"
+    else:
+        prompt += "【指示】上記の会議の前提と参加者の関係性を踏まえ、現在の進行状況に致命的なリスクや確認漏れがないか、ベテランの視点で監視・診断してください。"
+        
     try:
-        # Gemini 2.5 Flash に文脈付きでアドバイスを要請
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=f"{context_info}\n\nユーザーからの質問: {user_message}",
+            model='gemini-2.5-flash',
+            contents=prompt,
             config=genai.types.GenerateContentConfig(
                 system_instruction=(
-                    "あなたは優秀な経営コンサルタント兼ファシリテーターです。"
-                    "提供された会議の文字起こし文脈をベースに、客観的な議事分析、"
-                    "論点の矛盾点の指摘、あるいは今後の具体的なアクションプランのアドバイスを、"
-                    "簡潔かつ建設的に回答してください。"
+                    "あなたは交渉やマネジメントについて経験豊富な『ベテランの先輩』です。"
+                    "経験の浅い後輩が、会社を代表して他社や団体と交渉を行っています。"
+                    "【ルール】"
+                    "1. 問題がありそうな方向へ会議が進行したり、通常であれば確認すべき事柄（期間、コスト、条件、持ち帰り判断など）が欠如している場合、または【会議の目的】からズレている場合に限り、アドバイスを出力してください。"
+                    "2. 出力する際は、必ず『【タイトル】概要文』の形式を守り、極力端的に1〜2行で記述してください。（例：【期間やコストの確認が不足】相手の提示条件に対して、具体的な金額と納期の握りが漏れています。致命的な内容です。）"
+                    "3. 現在の会議進行に問題がなく、順調である場合は、余計なアドバイスはせず『現在、特に問題はありません。このまま目的の達成に向けて交渉を続けてください。』とだけ返してください。"
                 ),
-                temperature=0.7,
+                temperature=0.3, # 💡 厳格な診断のために温度を低めに設定
             ),
         )
-        return jsonify({"reply": response.text})
+        return jsonify({'reply': response.text})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -70,8 +70,30 @@
                 <!-- 1. 新規セッション開始 -->
                 <section class="mb-4">
                     <h2 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">1. 新規セッション開始</h2>
-                    <input type="text" id="sessionTitle" placeholder="セッション・タイトル：例. 定例ミーティング"
-                        class="w-full p-2 border border-gray-300 rounded text-sm focus:outline-blue-500">
+                    <input type="text" id="sessionTitle" placeholder="セッション・タイトル：例. A社会議"
+                        class="w-full p-2 border border-gray-300 rounded text-sm focus:outline-blue-500 mb-2">
+
+                        <!-- 会議の種類や参加者欄 -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                        <div>
+                            <label class="text-[10px] font-bold text-gray-500">会議の種類</label>
+                            <select id="meetingType"
+                                class="w-full p-2 border border-gray-300 rounded text-xs bg-white focus:outline-blue-500">
+                                <option value="対外打ち合わせ（顧客・クライアント）">対外打ち合わせ（クライアント）</option>
+                                <option value="パートナー・協力企業との折衝">協力企業との折衝</option>
+                                <option value="社内ミーティング・要件定義">社内ミーティング</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-gray-500">参加者構成</label>
+                            <input type="text" id="meetingParticipants" placeholder="例: 弊社メンバー、クライアント、協力企業"
+                                class="w-full p-2 border border-gray-300 rounded text-xs focus:outline-blue-500">
+                        </div>
+                    </div>
+                    
+                    <!-- 会議の目的の入力欄 -->
+                    <input type="text" id="meetingGoal" placeholder="この会議の目的・着地点：例. 予算100万以内での納期確定、安易に即答しない"
+                        class="w-full p-2 border border-gray-300 rounded text-xs focus:outline-blue-500">
 
                     <div class="flex gap-2 mt-2">
                         <button id="startBtn"
@@ -124,12 +146,19 @@
                 </div>
 
                 <!-- チャット入力欄 -->
-                <div class="flex gap-2">
-                    <input type="text" id="chatInput" placeholder="AIへの質問を入力..."
-                        class="flex-1 p-2 border border-gray-300 rounded text-xs focus:outline-blue-500">
-                    <button id="chatSendBtn"
-                        class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded text-xs transition shadow-xs">
-                        送信
+                <div class="flex flex-col gap-2">
+                    <div class="flex gap-2">
+                        <input type="text" id="chatInput" placeholder="先輩に個別に質問する場合に入力..."
+                            class="flex-1 p-2 border border-gray-300 rounded text-xs focus:outline-blue-500">
+                        <button id="chatSendBtn"
+                            class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded text-xs transition shadow-xs">
+                            質問
+                        </button>
+                    </div>
+                    <!--  追加：進行状況を裏でレビューしてもらうアドバイス召喚ボタン -->
+                    <button id="adviceBtn"
+                        class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded text-xs transition shadow-xs">
+                        🚨 先輩に現在の進行状況をチェックしてもらう（アドバイスモード）
                     </button>
                 </div>
             </section>
