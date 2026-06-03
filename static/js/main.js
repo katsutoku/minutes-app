@@ -111,7 +111,11 @@ generateBtn.addEventListener('click', async () => {
             summaryResult.classList.remove('hidden');
             window.location.reload();
         } else {
-            alert('エラー: ' + data.error);
+            if (data.error && data.error.includes('503')) {
+                alert('【Google AI Studioからのお知らせ】\n現在、無料枠のAIサーバーが世界的に大変混み合っています。大変恐れ入りますが、数十秒ほど時間を空けてから、もう一度「議事録を生成」ボタンを押してください。');
+            } else {
+                alert('エラー: ' + data.error);
+            }
         }
     } catch (error) {
         alert('通信エラーが発生しました。');
