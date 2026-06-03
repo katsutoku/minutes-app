@@ -1,6 +1,8 @@
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
+let isAdviceModeActive = false;
 
+// UI要素の一括取得
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const statusBadge = document.getElementById('statusBadge');
@@ -8,7 +10,31 @@ const transcriptArea = document.getElementById('transcriptArea');
 const generateBtn = document.getElementById('generateBtn');
 const summaryResult = document.getElementById('summaryResult');
 const sessionTitle = document.getElementById('sessionTitle');
+const meetingGoal = document.getElementById('meetingGoal');
+const meetingType = document.getElementById('meetingType');
+const meetingParticipants = document.getElementById('meetingParticipants');
+const toggleAdviceBtn = document.getElementById('toggleAdviceBtn');
+const manualCheckBtn = document.getElementById('manualCheckBtn');
+const chatBox = document.getElementById('chatBox');
+const chatInput = document.getElementById('chatInput');
+const chatSendBtn = document.getElementById('chatSendBtn');
 
+// アドバイスモード常時切り替えトグル
+toggleAdviceBtn.addEventListener('click', () => {
+    isAdviceModeActive = !isAdviceModeActive;
+    if (isAdviceModeActive) {
+        toggleAdviceBtn.textContent = '?? ON';
+        toggleAdviceBtn.className = 'bg-emerald-500 text-white text-xs font-bold py-1.5 px-3 rounded transition shadow-xs cursor-pointer select-none';
+        manualCheckBtn.classList.remove('hidden');
+        appendChatMessage('ai', '????? 先輩:「アドバイスモードを有効にしたな。会議の前提に沿って見守っているぞ。」');
+    } else {
+        toggleAdviceBtn.textContent = '?? OFF';
+        toggleAdviceBtn.className = 'bg-gray-400 text-white text-xs font-bold py-1.5 px-3 rounded transition shadow-xs cursor-pointer select-none';
+        manualCheckBtn.classList.add('hidden');
+    }
+});
+
+// 音声認識（Web Speech API）初期化
 if (SpeechRecognition) {
     recognition = new SpeechRecognition();
     recognition.continuous = true;       // 連続録音を維持
@@ -24,13 +50,15 @@ if (SpeechRecognition) {
         // 💡 今回のイベントで発生したテキストを解析
         for (let i = event.resultIndex; i < event.results.length; ++i) {
             const result = event.results[i];
-            if (result.isFinal) {
-                // 確定したら、保存用の変数に改行付きで追加
-                savedFinalText += result[0].transcript + '\n';
-            } else {
-                // 話し途中のものは一時的な変数に溜める
-                interimTranscript += result[0].transcript;
-            }
+            if (result) {            
+	            if (result.isFinal) {
+	                // 確定したら、保存用の変数に改行付きで追加
+	                savedFinalText += result[0].transcript + '\n';
+	            } else {
+	                // 話し途中のものは一時的な変数に溜める
+	                interimTranscript += result[0].transcript;
+	            }
+	        }
         }
 
         // 💡 確定済みの文章 ＋ 今まさに話している途中の文字 をリアルタイムに結合して画面に表示！
@@ -83,91 +111,44 @@ stopBtn.addEventListener('click', () => {
     recognition.stop();
     stopBtn.classList.add('hidden');
     startBtn.classList.remove('hidden');
+    
+    // ?? ONの時は録音停止時に自動診断
+    if (isAdviceModeActive && transcriptArea.value.trim() !== '') triggerAiAdvice();
 });
 
-// 議事録生成API送信
-generateBtn.addEventListener('click', async () => {
-    const text = transcriptArea.value.trim();
-    const title = sessionTitle.value.trim() || '定例ミーティング';
+// 先輩への進行チェック通信処理
+async function triggerAiAdvice() {
+    const transcript = transcriptArea.value.trim();
+    if (!transcript) return;
 
-    if (!text) {
-        alert('文字起こしされたテキストがありません。テキストエリアに直接文字入力を入力してテストすることも可能です。');
-        return;
-    }
-
-    generateBtn.textContent = '生成＆保存中...';
-    generateBtn.disabled = true;
+    manualCheckBtn.textContent = '分析中...';
+    manualCheckBtn.disabled = true;
+    const loadId = appendChatMessage('ai', '（先輩が議論ログを分析中...）');
 
     try {
-        const response = await fetch('/api/summarize', {
+        const response = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: text, title: title })
+            body: JSON.stringify({
+                message: '',
+                transcript: transcript,
+                goal: meetingGoal.value.trim() || '一般的なビジネス交渉',
+                type: meetingType.value,
+                participants: meetingParticipants.value.trim() || '未入力'
+            })
         });
-
         const data = await response.json();
-        if (response.ok) {
-            summaryResult.textContent = data.summary;
-            summaryResult.classList.remove('hidden');
-            window.location.reload();
-        } else {
-            if (data.error && data.error.includes('503')) {
-                alert('【Google AI Studioからのお知らせ】\n現在、無料枠のAIサーバーが世界的に大変混み合っています。大変恐れ入りますが、数十秒ほど時間を空けてから、もう一度「議事録を生成」ボタンを押してください。');
-            } else {
-                alert('エラー: ' + data.error);
-            }
-        }
+        document.getElementById(loadId).remove();
+        if (response.ok) appendChatMessage('ai', '????? 先輩からの助言:\n' + data.reply);
+        else appendChatMessage('ai', '診断エラー: ' + data.error);
     } catch (error) {
-        alert('通信エラーが発生しました。');
+        document.getElementById(loadId).remove();
+        appendChatMessage('ai', '通信エラーが発生しました。');
     } finally {
-        generateBtn.textContent = '議事録を生成して履歴に保存';
-        generateBtn.disabled = false;
-    }
-});
-
-// モーダル表示制御
-function showHistoryModal(title, date, summary, transcript) {
-    document.getElementById('modalTitle').textContent = title;
-    document.getElementById('modalDate').textContent = "作成日時: " + date;
-    document.getElementById('modalSummary').textContent = summary;
-    document.getElementById('modalTranscript').textContent = transcript;
-    document.getElementById('historyModal').classList.remove('hidden');
-}
-
-function closeHistoryModal() {
-    document.getElementById('historyModal').classList.add('hidden');
-}
-
-document.getElementById('historyModal').addEventListener('click', (e) => {
-    if (e.target === document.getElementById('historyModal')) closeHistoryModal();
-});
-
-// 議事録の非同期削除処理
-async function deleteMinute(minuteId) {
-    if (!confirm('この議事録を完全に削除してもよろしいですか？\n(この操作は取り消せません)')) return;
-
-    try {
-        const response = await fetch(`/api/minutes/${minuteId}`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' }
-        });
-
-        const data = await response.json();
-        if (response.ok) {
-            // 削除成功時に画面を自動リロードしてリストを最新状態にする
-            window.location.reload();
-        } else {
-            alert('エラー: ' + data.error);
-        }
-    } catch (error) {
-        alert('削除通信中にエラーが発生しました。');
+        manualCheckBtn.textContent = '? 今すぐ進行チェック';
+        manualCheckBtn.disabled = false;
     }
 }
-
-//  AIチャット機能の制御ロジック
-const chatBox = document.getElementById('chatBox');
-const chatInput = document.getElementById('chatInput');
-const chatSendBtn = document.getElementById('chatSendBtn');
 
 chatSendBtn.addEventListener('click', async () => {
     const message = chatInput.value.trim();
@@ -186,7 +167,13 @@ chatSendBtn.addEventListener('click', async () => {
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: message, transcript: transcript })
+            body: JSON.stringify({
+                message: message,
+                transcript: transcript,
+                goal: meetingGoal.value.trim() || '一般的なビジネス交渉',
+                type: meetingType.value,
+                participants: meetingParticipants.value.trim() || '未入力'
+            })
         });
 
         const data = await response.json();
@@ -209,6 +196,68 @@ chatSendBtn.addEventListener('click', async () => {
 chatInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') chatSendBtn.click();
 });
+
+// 議事録生成API送信
+generateBtn.addEventListener('click', async () => {
+    const text = transcriptArea.value.trim();
+    const title = sessionTitle.value.trim() || '定例ミーティング';
+
+    if (!text) {
+        alert('文字起こしされたテキストがありません。テキストエリアに直接文字入力を入力してテストすることも可能です。');
+        return;
+    }
+
+    generateBtn.textContent = '生成＆保存中...';
+    generateBtn.disabled = true;
+
+    try {
+        const response = await fetch('/api/summarize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text, title: sessionTitle.value.trim() || '定例ミーティング' })
+        });
+
+        if (response.ok) {
+            //summaryResult.textContent = data.summary;
+            //summaryResult.classList.remove('hidden');
+            window.location.reload();
+        } else {
+	        const data = await response.json();
+            if (data.error && data.error.includes('503')) {
+                alert('【Google AI Studioからのお知らせ】\n現在、無料枠のAIサーバーが世界的に大変混み合っています。大変恐れ入りますが、数十秒ほど時間を空けてから、もう一度「議事録を生成」ボタンを押してください。');
+            } else {
+                alert('エラー: ' + data.error);
+            }
+        }
+    } catch (error) {
+        alert('通信エラーが発生しました。');
+    } finally {
+        generateBtn.textContent = '議事録を生成して履歴に保存';
+        generateBtn.disabled = false;
+    }
+});
+
+// 議事録の非同期削除処理
+async function deleteMinute(minuteId) {
+    if (!confirm('この議事録を完全に削除してもよろしいですか？\n(この操作は取り消せません)')) return;
+
+    try {
+        const response = await fetch(`/api/minutes/${minuteId}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (response.ok) {
+            // 削除成功時に画面を自動リロードしてリストを最新状態にする
+            window.location.reload();
+        } else {
+	        const data = await response.json();
+            alert('エラー: ' + data.error);
+        }
+    } catch (error) {
+        alert('削除通信中にエラーが発生しました。');
+    }
+}
 
 // チャット画面にメッセージ要素を追加する共通関数
 function appendChatMessage(sender, text) {
@@ -236,46 +285,21 @@ function appendChatMessage(sender, text) {
     return uniqueId; // ローディング消去用にIDを返す
 }
 
-//  アドバイスモード（自動チェック）のボタン制御
-const adviceBtn = document.getElementById('adviceBtn');
-const meetingGoal = document.getElementById('meetingGoal');
+// モーダル表示制御
+function showHistoryModal(title, date, summary, transcript) {
+    document.getElementById('modalTitle').textContent = title;
+    document.getElementById('modalDate').textContent = "作成日時: " + date;
+    document.getElementById('modalSummary').textContent = summary;
+    document.getElementById('modalTranscript').textContent = transcript;
+    document.getElementById('historyModal').classList.remove('hidden');
+}
 
-adviceBtn.addEventListener('click', async () => {
-    const transcript = transcriptArea.value.trim();
-    const goal = meetingGoal.value.trim() || '一般的なビジネス交渉';
+function closeHistoryModal() {
+    document.getElementById('historyModal').classList.add('hidden');
+}
 
-    if (!transcript) {
-        alert('まだ文字起こしされたテキストがありません。会議が始まってからチェックしてください。');
-        return;
-    }
-
-    adviceBtn.textContent = '先輩がログを鋭く分析中...';
-    adviceBtn.disabled = true;
-    appendChatMessage('ai', '（現在の議論のチェックを開始しました...）');
-
-    try {
-        const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                message: '',  // 空文字を渡すことでバックエンド側で自動診断モードを起動
-                transcript: transcript,
-                goal: goal,
-                type: document.getElementById('meetingType').value,
-                participants: document.getElementById('meetingParticipants').value || '未入力'
-            })
-        });
-
-        const data = await response.json();
-        if (response.ok) {
-            appendChatMessage('ai', '👨‍💼 先輩からの助言:\n' + data.reply);
-        } else {
-            appendChatMessage('ai', 'チェックエラー: ' + data.error);
-        }
-    } catch (error) {
-        appendChatMessage('ai', '通信エラーが発生しました。');
-    } finally {
-        adviceBtn.textContent = '🚨 先輩に現在の進行状況をチェックしてもらう（アドバイスモード）';
-        adviceBtn.disabled = false;
+document.getElementById('historyModal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('historyModal')) {
+    	closeHistoryModal();
     }
 });
