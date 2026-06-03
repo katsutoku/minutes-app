@@ -112,6 +112,28 @@
                     <!-- 生成結果 -->
                 </div>
             </section>
+
+            <!--  AIミーティングアシスタント（チャット機能） -->
+            <section class="border-t border-gray-100 pt-4 mt-4">
+                <h2 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">🤖 AIアシスタントに相談（チャット）</h2>
+
+                <!-- チャット履歴表示窓 -->
+                <div id="chatBox"
+                    class="w-full h-32 p-3 border border-gray-200 bg-gray-50 rounded text-xs overflow-y-auto space-y-2 mb-2">
+                    <div class="text-gray-400 text-center pt-4 italic">「この議論の問題点は？」「次のアクションの抜け漏れは？」など聞いてみましょう</div>
+                </div>
+
+                <!-- チャット入力欄 -->
+                <div class="flex gap-2">
+                    <input type="text" id="chatInput" placeholder="AIへの質問を入力..."
+                        class="flex-1 p-2 border border-gray-300 rounded text-xs focus:outline-blue-500">
+                    <button id="chatSendBtn"
+                        class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded text-xs transition shadow-xs">
+                        送信
+                    </button>
+                </div>
+            </section>
+
         </div>
     </main>
 

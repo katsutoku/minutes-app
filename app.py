@@ -178,5 +178,47 @@ with app.app_context():
         db.session.add(demo_user)
         db.session.commit()
 
+
+# ----------------------------------------------------
+#  ルーティング（AIアドバイザーチャット：ログイン必須）
+# ----------------------------------------------------
+@app.route("/api/chat", methods=["POST"])
+@login_required
+def ai_chat():
+    data = request.json
+    user_message = data.get("message", "")  # ユーザーからの質問
+    transcript = data.get("transcript", "")  # 現在の文字起こし本文
+
+    if not user_message:
+        return jsonify({"error": "メッセージが空です"}), 400
+
+    # 文字起こしが空の場合のコンテキスト分岐処理
+    context_info = (
+        f"現在の会議の文字起こし内容:\n{transcript}"
+        if transcript
+        else "現在、会議の文字起こしデータはありません。一般的なビジネスアドバイスを行ってください。"
+    )
+
+    try:
+        # Gemini 2.5 Flash に文脈付きでアドバイスを要請
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=f"{context_info}\n\nユーザーからの質問: {user_message}",
+            config=genai.types.GenerateContentConfig(
+                system_instruction=(
+                    "あなたは優秀な経営コンサルタント兼ファシリテーターです。"
+                    "提供された会議の文字起こし文脈をベースに、客観的な議事分析、"
+                    "論点の矛盾点の指摘、あるいは今後の具体的なアクションプランのアドバイスを、"
+                    "簡潔かつ建設的に回答してください。"
+                ),
+                temperature=0.7,
+            ),
+        )
+        return jsonify({"reply": response.text})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == "__main__":
     app.run(debug=True)

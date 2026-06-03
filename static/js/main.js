@@ -163,3 +163,76 @@ async function deleteMinute(minuteId) {
         alert('削除通信中にエラーが発生しました。');
     }
 }
+
+//  AIチャット機能の制御ロジック
+const chatBox = document.getElementById('chatBox');
+const chatInput = document.getElementById('chatInput');
+const chatSendBtn = document.getElementById('chatSendBtn');
+
+chatSendBtn.addEventListener('click', async () => {
+    const message = chatInput.value.trim();
+    const transcript = transcriptArea.value.trim(); //  現在の文字起こしを取得
+
+    if (!message) return;
+
+    // ユーザーのメッセージを画面に即時追加
+    appendChatMessage('user', message);
+    chatInput.value = ''; // 入力欄をクリア
+
+    // ローディング表示
+    const loadingId = appendChatMessage('ai', '思考中...');
+
+    try {
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: message, transcript: transcript })
+        });
+
+        const data = await response.json();
+
+        // ローディングメッセージを消去
+        document.getElementById(loadingId).remove();
+
+        if (response.ok) {
+            appendChatMessage('ai', data.reply);
+        } else {
+            appendChatMessage('ai', 'エラーが発生しました: ' + data.error);
+        }
+    } catch (error) {
+        document.getElementById(loadingId).remove();
+        appendChatMessage('ai', '通信エラーが発生しました。');
+    }
+});
+
+// エンターキーでも送信できるように設定
+chatInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') chatSendBtn.click();
+});
+
+// チャット画面にメッセージ要素を追加する共通関数
+function appendChatMessage(sender, text) {
+    // 初回の案内文があれば消去
+    if (chatBox.querySelector('.italic')) {
+        chatBox.innerHTML = '';
+    }
+
+    const msgDiv = document.createElement('div');
+    const uniqueId = 'msg-' + Date.now();
+    msgDiv.id = uniqueId;
+    msgDiv.className = 'p-2 rounded max-w-[85%] text-xs leading-relaxed whitespace-pre-wrap ';
+
+    if (sender === 'user') {
+        msgDiv.className += 'bg-blue-100 text-blue-900 ml-auto text-right';
+        msgDiv.textContent = text;
+    } else {
+        msgDiv.className += 'bg-white border border-gray-200 text-gray-800';
+        msgDiv.textContent = text;
+    }
+
+    chatBox.appendChild(msgDiv);
+    chatBox.scrollTop = chatBox.scrollHeight; // 常に下部へスクロール
+
+    return uniqueId; // ローディング消去用にIDを返す
+}
+
