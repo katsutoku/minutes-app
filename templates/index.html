@@ -12,7 +12,7 @@
 
 <body class="bg-blue-50 min-h-screen p-4 md:p-6 font-sans">
 
-    <!-- 🌐 ヘッダーエリア（ログアウトボタンを配置） -->
+    <!--  ヘッダーエリア（ログアウトボタンを配置） -->
     <header
         class="max-w-5xl mx-auto flex justify-between items-center mb-6 bg-white p-4 rounded-lg shadow-xs border border-gray-100">
         <h1 class="text-lg font-bold text-gray-800 flex items-center gap-2">
@@ -29,10 +29,10 @@
         </div>
     </header>
 
-    <!-- 📦 メインコンテンツ（2カラム構成） -->
+    <!--  メインコンテンツ（2カラム構成） -->
     <main class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
 
-        <!-- 📜 左側カラム：過去の議事録履歴 (1カラム分) -->
+        <!--  左側カラム：過去の議事録履歴 (1カラム分) -->
         <div class="bg-white rounded-lg shadow-md p-4 border border-gray-100 h-[600px] flex flex-col">
             <h2 class="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1 border-b border-gray-100 pb-2">
                 📋 過去の議事録履歴 ({{ minutes|length }}件)
@@ -40,12 +40,22 @@
             <div class="overflow-y-auto flex-1 space-y-2 pr-1" id="historyList">
                 {% if minutes %}
                 {% for item in minutes %}
-                <button
-                    class="w-full text-left p-3 rounded-lg border border-gray-200 hover:bg-blue-50/50 hover:border-blue-300 transition text-xs block group"
-                    onclick="showHistoryModal('{{ item.title|e }}', '{{ item.created_at.strftime('%Y/%m/%d %H:%M') }}', `{{ item.summary|e }}`, `{{ item.transcript|e }}`)">
-                    <div class="font-bold text-gray-800 truncate group-hover:text-blue-600">{{ item.title }}</div>
-                    <div class="text-gray-400 mt-1 text-[10px]">{{ item.created_at.strftime('%Y/%m/%d %H:%M') }}</div>
-                </button>
+                <!-- 削除ボタンを右端に配置するため、相対位置(relative)のグループにする -->
+                <div class="relative group w-full mb-2">
+                    <button
+                        class="w-full text-left p-3 pr-10 rounded-lg border border-gray-200 hover:bg-blue-50/50 hover:border-blue-300 transition text-xs block"
+                        onclick="showHistoryModal('{{ item.title|e }}', '{{ item.created_at.strftime('%Y/%m/%d %H:%M') }}', `{{ item.summary|e }}`, `{{ item.transcript|e }}`)">
+                        <div class="font-bold text-gray-800 truncate group-hover:text-blue-600">{{ item.title }}</div>
+                        <div class="text-gray-400 mt-1 text-[10px]">{{ item.created_at.strftime('%Y/%m/%d %H:%M') }}
+                        </div>
+                    </button>
+                    <!--  削除ボタン（クリック時にモーダルが開くのを防ぐイベントストップ付き） -->
+                    <button onclick="event.stopPropagation(); deleteMinute({{ item.id }})"
+                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 text-sm p-1 transition cursor-pointer"
+                        title="削除する">
+                        🗑️
+                    </button>
+                </div>
                 {% endfor %}
                 {% else %}
                 <p class="text-gray-400 text-xs text-center pt-8">履歴はまだありません</p>
@@ -53,7 +63,7 @@
             </div>
         </div>
 
-        <!-- 🎙️ 右側カラム：メイン操作エリア (2カラム分) -->
+        <!--  右側カラム：メイン操作エリア (2カラム分) -->
         <div
             class="md:col-span-2 bg-white rounded-lg shadow-md p-6 border border-gray-100 flex flex-col justify-between h-[600px]">
             <div>
@@ -105,7 +115,7 @@
         </div>
     </main>
 
-    <!-- 🔍 履歴詳細確認用のモーダルウィンドウ（初期状態は非表示） -->
+    <!--  履歴詳細確認用のモーダルウィンドウ（初期状態は非表示） -->
     <div id="historyModal"
         class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 hidden z-50 animate-fade-in">
         <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[85vh] flex flex-col">
@@ -136,6 +146,7 @@
 
     <!-- JavaScriptロジック -->
     <!-- <script src="/static/js/main.js"></script> -->
-     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
+
 </html>

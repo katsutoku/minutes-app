@@ -141,3 +141,25 @@ function closeHistoryModal() {
 document.getElementById('historyModal').addEventListener('click', (e) => {
     if (e.target === document.getElementById('historyModal')) closeHistoryModal();
 });
+
+// 議事録の非同期削除処理
+async function deleteMinute(minuteId) {
+    if (!confirm('この議事録を完全に削除してもよろしいですか？\n(この操作は取り消せません)')) return;
+
+    try {
+        const response = await fetch(`/api/minutes/${minuteId}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            // 削除成功時に画面を自動リロードしてリストを最新状態にする
+            window.location.reload();
+        } else {
+            alert('エラー: ' + data.error);
+        }
+    } catch (error) {
+        alert('削除通信中にエラーが発生しました。');
+    }
+}
