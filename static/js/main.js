@@ -1,6 +1,7 @@
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let isAdviceModeActive = false;
+let savedFinalText = '';
 
 // UI要素の一括取得
 const startBtn = document.getElementById('startBtn');
@@ -41,13 +42,10 @@ if (SpeechRecognition) {
     recognition.interimResults = true;   // 話し途中の言葉もリアルタイム表示
     recognition.lang = 'ja-JP';
 
-    // これまでの確定した全文章を保持する変数（ループの外に置くか、既存のものと入れ替え）
-    let savedFinalText = '';
-
     recognition.onresult = (event) => {
         let interimTranscript = '';
 
-        // 💡 今回のイベントで発生したテキストを解析
+        //  今回のイベントで発生したテキストを解析
         for (let i = event.resultIndex; i < event.results.length; ++i) {
             const result = event.results[i];
             if (result) {            
@@ -61,7 +59,7 @@ if (SpeechRecognition) {
 	        }
         }
 
-        // 💡 確定済みの文章 ＋ 今まさに話している途中の文字 をリアルタイムに結合して画面に表示！
+        //  確定済みの文章 ＋ 今まさに話している途中の文字 をリアルタイムに結合して画面に表示！
         transcriptArea.value = savedFinalText + interimTranscript;
 
         // 常に最新の文字が見えるように最下部へスクロール
@@ -70,12 +68,12 @@ if (SpeechRecognition) {
 
     recognition.onerror = (event) => {
         console.error("音声認識エラー:", event.error);
-        // 💡 画面のバッジにエラー原因（aborted, network, not-allowed等）を直接出して見える化します
+        //  画面のバッジにエラー原因（aborted, network, not-allowed等）を直接出して見える化します
         statusBadge.textContent = 'エラー: ' + event.error;
         statusBadge.className = 'text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-sm';
     };
 
-    // 💡 途中で勝手に切れてしまう対策（認識が終了したら自動で再起動する）
+    //  途中で勝手に切れてしまう対策（認識が終了したら自動で再起動する）
     recognition.onend = () => {
         if (statusBadge.textContent.includes('録音中')) {
             recognition.start();
@@ -91,6 +89,7 @@ startBtn.addEventListener('click', () => {
     }
     // 最初にはじめるときはエリアをクリア
     transcriptArea.value = '';
+    savedFinalText = '';
 
     try {
         recognition.start();
