@@ -3,6 +3,12 @@ let recognition = null;
 let isAdviceModeActive = false;
 let savedFinalText = '';
 
+// 案3: 句読点＋タイムアウトによる改行制御
+let pendingText = '';          // isFinalで確定したがまだ改行されていないテキストの蓄積バッファ
+let silenceTimer = null;       // 無音タイムアウト用タイマー
+const SILENCE_MS = 500;       // 無音と判定するミリ秒（調整可）
+const SPLIT_PATTERN = /[。！？!?]/; // 改行トリガーとなる句読点
+
 // UI要素の一括取得
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
@@ -50,17 +56,30 @@ if (SpeechRecognition) {
             const result = event.results[i];
             if (result) {            
 	            if (result.isFinal) {
-	                // 確定したら、保存用の変数に改行付きで追加
-	                savedFinalText += result[0].transcript + '\n';
+	                const finalText = result[0].transcript.trim();
+	                if (!finalText) continue;
+
+	                // バッファに追記
+	                pendingText += finalText;
+
+	                // 【案3-1】句読点が含まれていれば即改行
+	                if (SPLIT_PATTERN.test(pendingText)) {
+	                    flushPending();
+	                } else {
+	                    // 【案3-2】句読点なし → タイムアウト待ち（既存タイマーはリセット）
+	                    resetSilenceTimer();
+	                }
 	            } else {
 	                // 話し途中のものは一時的な変数に溜める
 	                interimTranscript += result[0].transcript;
+	                // interim更新 = まだ話しているのでタイマーをリセット
+	                resetSilenceTimer();
 	            }
 	        }
         }
 
-        //  確定済みの文章 ＋ 今まさに話している途中の文字 をリアルタイムに結合して画面に表示！
-        transcriptArea.value = savedFinalText + interimTranscript;
+        // 確定済み行 ＋ 現在入力中テキストをリアルタイム表示
+        transcriptArea.value = savedFinalText + (pendingText ? pendingText : '') + interimTranscript;
 
         // 常に最新の文字が見えるように最下部へスクロール
         transcriptArea.scrollTop = transcriptArea.scrollHeight;
@@ -81,6 +100,31 @@ if (SpeechRecognition) {
     };
 }
 
+// -------------------------------------------------------
+// 案3: 改行制御ヘルパー関数
+// -------------------------------------------------------
+
+// pendingTextを確定行としてsavedFinalTextに移して改行する
+function flushPending() {
+    if (!pendingText.trim()) return;
+    savedFinalText += pendingText.trim() + '\n';
+    pendingText = '';
+    clearTimeout(silenceTimer);
+    silenceTimer = null;
+    transcriptArea.value = savedFinalText;
+    transcriptArea.scrollTop = transcriptArea.scrollHeight;
+}
+
+// タイムアウトタイマーをリセット（まだ話していると判断したとき）
+function resetSilenceTimer() {
+    clearTimeout(silenceTimer);
+    if (!pendingText.trim()) return;
+    silenceTimer = setTimeout(() => {
+        // SILENCE_MS 間interim更新がなければ無音と判断して改行
+        flushPending();
+    }, SILENCE_MS);
+}
+
 // 録音開始ボタン
 startBtn.addEventListener('click', () => {
     if (!recognition) {
@@ -90,6 +134,9 @@ startBtn.addEventListener('click', () => {
     // 最初にはじめるときはエリアをクリア
     transcriptArea.value = '';
     savedFinalText = '';
+    pendingText = '';
+    clearTimeout(silenceTimer);
+    silenceTimer = null;
 
     try {
         recognition.start();
@@ -110,6 +157,8 @@ stopBtn.addEventListener('click', () => {
     recognition.stop();
     stopBtn.classList.add('hidden');
     startBtn.classList.remove('hidden');
+    // 停止時に pending に残っているテキストを確定して改行
+    flushPending();
     
     // ?? ONの時は録音停止時に自動診断
     if (isAdviceModeActive && transcriptArea.value.trim() !== '') triggerAiAdvice();
