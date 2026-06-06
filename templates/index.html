@@ -107,7 +107,21 @@
                         <span>2. ライブ文字起こし</span>
                         <span id="statusBadge" class="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-sm">停止中</span>
                     </h2>
-                    <textarea id="transcriptArea" class="w-full h-24 p-3 border border-gray-300 rounded text-xs bg-gray-50 resize-none focus:outline-none" readonly></textarea>
+                    <textarea id="transcriptArea" class="w-full h-20 p-3 border border-gray-300 rounded text-xs bg-gray-50 resize-none focus:outline-none" readonly></textarea>
+                </section>
+
+                <!-- 3. リアルタイム要約ログ -->
+                <section>
+                    <h2 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 flex justify-between items-center">
+                        <span>3. リアルタイム要約ログ</span>
+                        <div class="flex items-center gap-2">
+                            <span id="liveSummarizeBadge" class="text-[10px] text-gray-400 hidden">✦ 要約中...</span>
+                            <button id="clearBulletsBtn" class="text-[10px] text-gray-400 hover:text-red-400 transition hidden">クリア</button>
+                        </div>
+                    </h2>
+                    <div id="bulletArea" class="w-full h-20 p-3 border border-gray-200 rounded text-xs bg-white overflow-y-auto space-y-0.5">
+                        <p class="text-gray-300 italic">録音開始すると、発言ごとの要約がここに追加されます</p>
+                    </div>
                 </section>
             </div>
 

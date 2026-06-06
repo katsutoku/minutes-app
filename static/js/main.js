@@ -1,6 +1,11 @@
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let isAdviceModeActive = false;
+let savedFinalText = '';
+
+// リアルタイム要約管理
+let summarizeQueue = [];      // 要約待ちの文のキュー
+let isSummarizing = false;    // 要約APIの多重呼び出し防止フラグ
 
 // UI要素の一括取得
 const startBtn = document.getElementById('startBtn');
@@ -18,6 +23,9 @@ const manualCheckBtn = document.getElementById('manualCheckBtn');
 const chatBox = document.getElementById('chatBox');
 const chatInput = document.getElementById('chatInput');
 const chatSendBtn = document.getElementById('chatSendBtn');
+const bulletArea = document.getElementById('bulletArea');
+const liveSummarizeBadge = document.getElementById('liveSummarizeBadge');
+const clearBulletsBtn = document.getElementById('clearBulletsBtn');
 
 // アドバイスモード常時切り替えトグル
 toggleAdviceBtn.addEventListener('click', () => {
@@ -41,19 +49,19 @@ if (SpeechRecognition) {
     recognition.interimResults = true;   // 話し途中の言葉もリアルタイム表示
     recognition.lang = 'ja-JP';
 
-    // これまでの確定した全文章を保持する変数（ループの外に置くか、既存のものと入れ替え）
-    let savedFinalText = '';
-
     recognition.onresult = (event) => {
         let interimTranscript = '';
 
-        // 💡 今回のイベントで発生したテキストを解析
+        //  今回のイベントで発生したテキストを解析
         for (let i = event.resultIndex; i < event.results.length; ++i) {
             const result = event.results[i];
-            if (result) {            
+            if (result) {
 	            if (result.isFinal) {
-	                // 確定したら、保存用の変数に改行付きで追加
-	                savedFinalText += result[0].transcript + '\n';
+	                const finalText = result[0].transcript;
+	                savedFinalText += finalText + '\n';
+	                // 確定した文をキューに積んで要約を非同期で実行
+	                summarizeQueue.push(finalText);
+	                processNextSummarize();
 	            } else {
 	                // 話し途中のものは一時的な変数に溜める
 	                interimTranscript += result[0].transcript;
@@ -61,7 +69,7 @@ if (SpeechRecognition) {
 	        }
         }
 
-        // 💡 確定済みの文章 ＋ 今まさに話している途中の文字 をリアルタイムに結合して画面に表示！
+        //  確定済みの文章 ＋ 今まさに話している途中の文字 をリアルタイムに結合して画面に表示！
         transcriptArea.value = savedFinalText + interimTranscript;
 
         // 常に最新の文字が見えるように最下部へスクロール
@@ -70,12 +78,12 @@ if (SpeechRecognition) {
 
     recognition.onerror = (event) => {
         console.error("音声認識エラー:", event.error);
-        // 💡 画面のバッジにエラー原因（aborted, network, not-allowed等）を直接出して見える化します
+        //  画面のバッジにエラー原因（aborted, network, not-allowed等）を直接出して見える化します
         statusBadge.textContent = 'エラー: ' + event.error;
         statusBadge.className = 'text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-sm';
     };
 
-    // 💡 途中で勝手に切れてしまう対策（認識が終了したら自動で再起動する）
+    //  途中で勝手に切れてしまう対策（認識が終了したら自動で再起動する）
     recognition.onend = () => {
         if (statusBadge.textContent.includes('録音中')) {
             recognition.start();
@@ -91,6 +99,10 @@ startBtn.addEventListener('click', () => {
     }
     // 最初にはじめるときはエリアをクリア
     transcriptArea.value = '';
+    savedFinalText = '';
+    summarizeQueue = [];
+    isSummarizing = false;
+    clearBullets();
 
     try {
         recognition.start();
@@ -303,3 +315,59 @@ document.getElementById('historyModal').addEventListener('click', (e) => {
     	closeHistoryModal();
     }
 });
+
+// -------------------------------------------------------
+// リアルタイム要約：キュー処理（直列実行で多重呼び出し防止）
+// -------------------------------------------------------
+async function processNextSummarize() {
+    if (isSummarizing || summarizeQueue.length === 0) return;
+
+    isSummarizing = true;
+    liveSummarizeBadge.classList.remove('hidden');
+
+    const sentence = summarizeQueue.shift();
+
+    try {
+        const response = await fetch('/api/live-summarize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sentence })
+        });
+        const data = await response.json();
+
+        if (response.ok && data.bullet && data.bullet.trim() !== '') {
+            appendBullet(data.bullet.trim());
+        }
+    } catch (e) {
+        console.warn('live-summarize error:', e);
+    } finally {
+        isSummarizing = false;
+        liveSummarizeBadge.classList.add('hidden');
+        // 次のキューがあれば続けて処理
+        if (summarizeQueue.length > 0) processNextSummarize();
+    }
+}
+
+// 箇条書きを1行追加する
+function appendBullet(text) {
+    // 初回プレースホルダーを消去
+    const placeholder = bulletArea.querySelector('.italic');
+    if (placeholder) placeholder.remove();
+
+    const line = document.createElement('div');
+    line.className = 'flex items-start gap-1 text-gray-700 py-0.5 border-b border-gray-50';
+    line.innerHTML = `<span class="text-blue-400 mt-0.5 shrink-0">▸</span><span>${text}</span>`;
+    bulletArea.appendChild(line);
+    bulletArea.scrollTop = bulletArea.scrollHeight;
+
+    // クリアボタンを表示
+    clearBulletsBtn.classList.remove('hidden');
+}
+
+// 要約ログをクリアする
+function clearBullets() {
+    bulletArea.innerHTML = '<p class="text-gray-300 italic">録音開始すると、発言ごとの要約がここに追加されます</p>';
+    clearBulletsBtn.classList.add('hidden');
+}
+
+clearBulletsBtn.addEventListener('click', clearBullets);

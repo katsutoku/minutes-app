@@ -229,5 +229,46 @@ def ai_chat():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# ----------------------------------------------------
+#  ルーティング（リアルタイム発言要約：ログイン必須）
+# ----------------------------------------------------
+@app.route('/api/live-summarize', methods=['POST'])
+@login_required
+def live_summarize():
+    """
+    確定した発言テキストを受け取り、箇条書き1行の要約を返す。
+    フロントエンドから isFinal な文が確定するたびに呼ばれる。
+    """
+    data = request.json
+    sentence = data.get('sentence', '').strip()
+
+    if not sentence:
+        return jsonify({"error": "テキストが空です"}), 400
+
+    # 短すぎる発言（相槌・フィラー等）は要約不要としてそのまま返す
+    if len(sentence) < 10:
+        return jsonify({"bullet": sentence})
+
+    try:
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=f"発言内容：{sentence}",
+            config=genai.types.GenerateContentConfig(
+                system_instruction=(
+                    "あなたは会議の書記です。"
+                    "渡された1つの発言を、意味が失われないよう15字以内の箇条書き1行に要約してください。"
+                    "出力は要約文のみ。「・」や「-」などの記号は付けないでください。"
+                    "相槌・フィラー（「はい」「えーと」など）だけの場合は空文字を返してください。"
+                ),
+                temperature=0.2,
+            ),
+        )
+        bullet = response.text.strip()
+        return jsonify({"bullet": bullet})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == "__main__":
     app.run(debug=True)
