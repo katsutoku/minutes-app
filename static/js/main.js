@@ -1,13 +1,13 @@
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let isAdviceModeActive = false;
-let savedFinalText = '';
 
-// 案3: 句読点＋タイムアウトによる改行制御
-let pendingText = '';          // isFinalで確定したがまだ改行されていないテキストの蓄積バッファ
-let silenceTimer = null;       // 無音タイムアウト用タイマー
-const SILENCE_MS = 500;       // 無音と判定するミリ秒（調整可）
-const SPLIT_PATTERN = /[。！？!?]/; // 改行トリガーとなる句読点
+// 状態管理
+let rawBuffer = '';        // isFinalで確定したテキストの蓄積バッファ
+let confirmedLines = [];   // AIが完結と判定した発言の配列
+let isSegmenting = false;  // API多重呼び出し防止フラグ
+let silenceTimer = null;   // 無音タイマー
+const SILENCE_MS = 2000;   // 無音判定の閾値（ミリ秒）
 
 // UI要素の一括取得
 const startBtn = document.getElementById('startBtn');
@@ -51,38 +51,23 @@ if (SpeechRecognition) {
     recognition.onresult = (event) => {
         let interimTranscript = '';
 
-        //  今回のイベントで発生したテキストを解析
         for (let i = event.resultIndex; i < event.results.length; ++i) {
             const result = event.results[i];
-            if (result) {            
+            if (result) {
 	            if (result.isFinal) {
 	                const finalText = result[0].transcript.trim();
-	                if (!finalText) continue;
-
-	                // バッファに追記
-	                pendingText += finalText;
-
-	                // 【案3-1】句読点が含まれていれば即改行
-	                if (SPLIT_PATTERN.test(pendingText)) {
-	                    flushPending();
-	                } else {
-	                    // 【案3-2】句読点なし → タイムアウト待ち（既存タイマーはリセット）
-	                    resetSilenceTimer();
-	                }
+	                if (finalText) rawBuffer += finalText;
 	            } else {
-	                // 話し途中のものは一時的な変数に溜める
 	                interimTranscript += result[0].transcript;
-	                // interim更新 = まだ話しているのでタイマーをリセット
-	                resetSilenceTimer();
 	            }
 	        }
         }
 
-        // 確定済み行 ＋ 現在入力中テキストをリアルタイム表示
-        transcriptArea.value = savedFinalText + (pendingText ? pendingText : '') + interimTranscript;
+        // 発話を検知したので無音タイマーをリセット
+        resetSilenceTimer();
 
-        // 常に最新の文字が見えるように最下部へスクロール
-        transcriptArea.scrollTop = transcriptArea.scrollHeight;
+        // 確定済み行 + 現在入力中テキストをリアルタイム表示
+        renderTranscript(interimTranscript);
     };
 
     recognition.onerror = (event) => {
@@ -100,41 +85,17 @@ if (SpeechRecognition) {
     };
 }
 
-// -------------------------------------------------------
-// 案3: 改行制御ヘルパー関数
-// -------------------------------------------------------
-
-// pendingTextを確定行としてsavedFinalTextに移して改行する
-function flushPending() {
-    if (!pendingText.trim()) return;
-    savedFinalText += pendingText.trim() + '\n';
-    pendingText = '';
-    clearTimeout(silenceTimer);
-    silenceTimer = null;
-    transcriptArea.value = savedFinalText;
-    transcriptArea.scrollTop = transcriptArea.scrollHeight;
-}
-
-// タイムアウトタイマーをリセット（まだ話していると判断したとき）
-function resetSilenceTimer() {
-    clearTimeout(silenceTimer);
-    if (!pendingText.trim()) return;
-    silenceTimer = setTimeout(() => {
-        // SILENCE_MS 間interim更新がなければ無音と判断して改行
-        flushPending();
-    }, SILENCE_MS);
-}
-
 // 録音開始ボタン
 startBtn.addEventListener('click', () => {
     if (!recognition) {
         alert("お使いのブラウザは音声認識に対応していません。Chrome等をお試しください。");
         return;
     }
-    // 最初にはじめるときはエリアをクリア
+    // 最初にはじめるときに状態をリセット
     transcriptArea.value = '';
-    savedFinalText = '';
-    pendingText = '';
+    rawBuffer = '';
+    confirmedLines = [];
+    isSegmenting = false;
     clearTimeout(silenceTimer);
     silenceTimer = null;
 
@@ -152,21 +113,89 @@ startBtn.addEventListener('click', () => {
 // 録音停止ボタン
 stopBtn.addEventListener('click', () => {
     if (!recognition) return;
-    statusBadge.textContent = '停止中';
-    statusBadge.className = 'text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-sm';
+    // タイマーを止めて残バッファを最終処理
+    clearTimeout(silenceTimer);
+    silenceTimer = null;
     recognition.stop();
     stopBtn.classList.add('hidden');
     startBtn.classList.remove('hidden');
-    // 停止時に pending に残っているテキストを確定して改行
-    flushPending();
-    
-    // ?? ONの時は録音停止時に自動診断
-    if (isAdviceModeActive && transcriptArea.value.trim() !== '') triggerAiAdvice();
+    // 残バッファがあれば最終セグメント処理
+    if (rawBuffer.trim()) {
+        runSegment().then(() => {
+            statusBadge.textContent = '停止中';
+            statusBadge.className = 'text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-sm';
+            if (isAdviceModeActive && getFullTranscript()) triggerAiAdvice();
+        });
+    } else {
+        statusBadge.textContent = '停止中';
+        statusBadge.className = 'text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-sm';
+        if (isAdviceModeActive && getFullTranscript()) triggerAiAdvice();
+    }
 });
+
+// -------------------------------------------------------
+// 無音検知・AI区切り処理
+// -------------------------------------------------------
+
+// 無音タイマーをリセット（発話/interim検知のたびに呼ぶ）
+function resetSilenceTimer() {
+    clearTimeout(silenceTimer);
+    if (!rawBuffer.trim()) return; // バッファが空なら待機不要
+    silenceTimer = setTimeout(() => {
+        // SILENCE_MS 間 onresult が来なければ発言完結と判断
+        runSegment();
+    }, SILENCE_MS);
+}
+
+// AIによる発言区切り処理
+async function runSegment() {
+    const input = rawBuffer.trim();
+    rawBuffer = '';
+    if (!input || isSegmenting) return;
+
+    isSegmenting = true;
+    statusBadge.textContent = '録音中... (AI解析中)';
+
+    try {
+        const response = await fetch('/api/segment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: input })
+        });
+        const data = await response.json();
+
+        if (response.ok && data.completed && data.completed.length > 0) {
+            confirmedLines.push(...data.completed);
+            renderTranscript();
+        }
+    } catch (e) {
+        // 通信失敗時はバッファを戻してロスを防ぐ
+        rawBuffer = input + rawBuffer;
+        console.warn('segment error:', e);
+    } finally {
+        isSegmenting = false;
+        if (statusBadge.textContent.includes('AI解析中')) {
+            statusBadge.textContent = '録音中...';
+        }
+    }
+}
+
+// transcriptAreaの表示を更新（確定済み行 + 入力中テキスト）
+function renderTranscript(interimText = '') {
+    const confirmed = confirmedLines.join('\n');
+    const sep = confirmed && interimText ? '\n' : '';
+    transcriptArea.value = confirmed + sep + interimText;
+    transcriptArea.scrollTop = transcriptArea.scrollHeight;
+}
+
+// 確定済み + バッファ中のテキストを結合して返す
+function getFullTranscript() {
+    return [...confirmedLines, rawBuffer].filter(Boolean).join('\n');
+}
 
 // 先輩への進行チェック通信処理
 async function triggerAiAdvice() {
-    const transcript = transcriptArea.value.trim();
+    const transcript = getFullTranscript();
     if (!transcript) return;
 
     manualCheckBtn.textContent = '分析中...';
@@ -200,7 +229,7 @@ async function triggerAiAdvice() {
 
 chatSendBtn.addEventListener('click', async () => {
     const message = chatInput.value.trim();
-    const transcript = transcriptArea.value.trim(); //  現在の文字起こしを取得
+    const transcript = getFullTranscript();
 
     if (!message) return;
 
@@ -247,7 +276,7 @@ chatInput.addEventListener('keypress', (e) => {
 
 // 議事録生成API送信
 generateBtn.addEventListener('click', async () => {
-    const text = transcriptArea.value.trim();
+    const text = getFullTranscript();
     const title = sessionTitle.value.trim() || '定例ミーティング';
 
     if (!text) {

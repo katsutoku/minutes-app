@@ -1,4 +1,5 @@
 import os
+import json
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
@@ -228,6 +229,48 @@ def ai_chat():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# ----------------------------------------------------
+#  ルーティング（AI発言区切り処理：ログイン必須）
+# ----------------------------------------------------
+@app.route('/api/segment', methods=['POST'])
+@login_required
+def segment():
+    data = request.json
+    text = data.get('text', '').strip()
+
+    if not text:
+        return jsonify({"completed": [], "incomplete": ""})
+
+    try:
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=f"以下は会議中の音声認識テキストです。\n\n{text}",
+            config=genai.types.GenerateContentConfig(
+                system_instruction=(
+                    "あなたは会議の文字起こしを整理するアシスタントです。"
+                    "渡されたテキストを意味の通る発言単位に区切り、以下のJSON形式のみで返してください。"
+                    "マークダウンのコードブロックや余計な文字は一切含めないでください。"
+                    '{"completed": ["完結した発言1", "完結した発言2"]}'
+                    "【判定ルール】"
+                    "- 句読点がなくても内容・文脈が変わっていれば別の発言として区切る"
+                    "- 報告・質問・回答・相槌はそれぞれ別の発言として扱う"
+                    "- 渡されたテキストは無音を検知して区切ったものなので、すべて完結した発言として扱う"
+                    "- completedは必ず1件以上返す"
+                ),
+                temperature=0.1,
+            ),
+        )
+
+        raw = response.text.strip().replace('```json', '').replace('```', '').strip()
+        result = json.loads(raw)
+        completed = result.get('completed', [])
+        return jsonify({"completed": completed})
+
+    except Exception as e:
+        # パース失敗時はテキスト全体を1件の完結発言として返す
+        return jsonify({"completed": [text]})
+
 
 if __name__ == "__main__":
     app.run(debug=True)
