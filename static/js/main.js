@@ -8,6 +8,7 @@ let confirmedLines = [];   // AIが完結と判定した発言の配列
 let isSegmenting = false;  // API多重呼び出し防止フラグ
 let silenceTimer = null;   // 無音タイマー
 const SILENCE_MS = 2000;   // 無音判定の閾値（ミリ秒）
+let pendingSegmentText = ''; // AI解析中に消えないよう保持する一時テキスト
 
 // UI要素の一括取得
 const startBtn = document.getElementById('startBtn');
@@ -156,6 +157,11 @@ async function runSegment() {
     isSegmenting = true;
     statusBadge.textContent = '録音中... (AI解析中)';
 
+    // API待機中もinputをpendingとして保持しておく
+    // renderTranscriptが何度呼ばれても消えなくなる
+    pendingSegmentText = input;
+    renderTranscript();
+
     try {
         const response = await fetch('/api/segment', {
             method: 'POST',
@@ -166,14 +172,15 @@ async function runSegment() {
 
         if (response.ok && data.completed && data.completed.length > 0) {
             confirmedLines.push(...data.completed);
-            renderTranscript();
         }
     } catch (e) {
         // 通信失敗時はバッファを戻してロスを防ぐ
         rawBuffer = input + rawBuffer;
         console.warn('segment error:', e);
     } finally {
+        pendingSegmentText = '';
         isSegmenting = false;
+        renderTranscript();
         if (statusBadge.textContent.includes('AI解析中')) {
             statusBadge.textContent = '録音中...';
         }
@@ -183,8 +190,9 @@ async function runSegment() {
 // transcriptAreaの表示を更新（確定済み行 + 入力中テキスト）
 function renderTranscript(interimText = '') {
     const confirmed = confirmedLines.join('\n');
-    const sep = confirmed && interimText ? '\n' : '';
-    transcriptArea.value = confirmed + sep + interimText;
+    // AI解析待機中はpendingSegmentTextを挟んで表示を維持する
+    const parts = [confirmed, pendingSegmentText, interimText].filter(Boolean);
+    transcriptArea.value = parts.join('\n');
     transcriptArea.scrollTop = transcriptArea.scrollHeight;
 }
 
