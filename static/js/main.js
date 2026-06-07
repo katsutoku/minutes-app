@@ -58,8 +58,9 @@ if (SpeechRecognition) {
 	            if (result.isFinal) {
 	                const finalText = result[0].transcript.trim();
 	                if (finalText) rawBuffer += finalText;
-	            } else {
-	                interimTranscript += result[0].transcript;
+	            }
+                else {
+                    interimTranscript += result[0].transcript;
 	            }
 	        }
         }
@@ -68,6 +69,7 @@ if (SpeechRecognition) {
         resetSilenceTimer();
 
         // 確定済み行 + 現在入力中テキストをリアルタイム表示
+        // console.log("★recognition.onresult - renderTranscript()\n");
         renderTranscript(interimTranscript);
     };
 
@@ -160,6 +162,7 @@ async function runSegment() {
     // API待機中もinputをpendingとして保持しておく
     // renderTranscriptが何度呼ばれても消えなくなる
     pendingSegmentText = input;
+    // console.log("★runSegment: top - renderTranscript()\n");
     renderTranscript();
 
     try {
@@ -175,11 +178,12 @@ async function runSegment() {
         }
     } catch (e) {
         // 通信失敗時はバッファを戻してロスを防ぐ
-        rawBuffer = input + rawBuffer;
+        //%%sk rawBuffer = input + rawBuffer;
         console.warn('segment error:', e);
     } finally {
         pendingSegmentText = '';
         isSegmenting = false;
+        // console.log("★runSegment: finaly - renderTranscript()\n");
         renderTranscript();
         if (statusBadge.textContent.includes('AI解析中')) {
             statusBadge.textContent = '録音中...';
@@ -187,13 +191,25 @@ async function runSegment() {
     }
 }
 
+
 // transcriptAreaの表示を更新（確定済み行 + 入力中テキスト）
 function renderTranscript(interimText = '') {
     const confirmed = confirmedLines.join('\n');
     // AI解析待機中はpendingSegmentTextを挟んで表示を維持する
-    const parts = [confirmed, pendingSegmentText, interimText].filter(Boolean);
+    const parts = [confirmed, rawBuffer, pendingSegmentText, interimText].filter(Boolean);
     transcriptArea.value = parts.join('\n');
     transcriptArea.scrollTop = transcriptArea.scrollHeight;
+
+    /* 入力中テキストが消える不具合調査のため
+    console.log("#renderTranscipt:\n");
+    var str = transcriptArea.value.replaceAll("\n", "/");
+    var str2 = rawBuffer.replaceAll("\n", "/");
+    console.log("  表示：" + str +"\n");
+    console.log("  rawBuffer：" + str2 + "\n");
+    console.log("  confirmed：" + confirmedLines.join('/')+"\n");
+    console.log("  pendingSegmentText：" + pendingSegmentText+"\n");
+    console.log("  interimText：" + (interimText ? interimText:"")+"\n");
+    */
 }
 
 // 確定済み + バッファ中のテキストを結合して返す
