@@ -13,6 +13,7 @@ from flask_login import (
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from google import genai
+from groq import Groq
 from dotenv import load_dotenv
 
 # .envの読み込み
@@ -33,6 +34,9 @@ login_manager.login_view = "login"  # 未ログイン時の転送先
 
 # Geminiクライアントの初期化
 client = genai.Client()
+
+# Groqクライアントの初期化（GROQ_API_KEYを環境変数から読み込む）
+groq_client = Groq()
 
 
 # ----------------------------------------------------
@@ -229,6 +233,32 @@ def ai_chat():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# ----------------------------------------------------
+#  ルーティング（Groq Whisper 文字起こし：ログイン必須）
+# ----------------------------------------------------
+@app.route('/api/transcribe', methods=['POST'])
+@login_required
+def transcribe():
+    if 'audio' not in request.files:
+        return jsonify({"error": "音声ファイルがありません"}), 400
+
+    audio_file = request.files['audio']
+
+    try:
+        transcription = groq_client.audio.transcriptions.create(
+            file=("audio.webm", audio_file.read(), audio_file.content_type or "audio/webm"),
+            model="whisper-large-v3-turbo",
+            language="ja",
+            prompt="これは日本語のビジネス会議の音声です。",  # 精度向上のためのヒント
+            response_format="text",
+        )
+        text = transcription.strip() if isinstance(transcription, str) else transcription.text.strip()
+        return jsonify({"text": text})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 # ----------------------------------------------------
 #  ルーティング（AI発言区切り処理：ログイン必須）
