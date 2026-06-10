@@ -87,14 +87,14 @@ if (SpeechRecognition) {
         for (let i = event.resultIndex; i < event.results.length; ++i) {
             const result = event.results[i];
             if (result) {
-	            if (result.isFinal) {
-	                const finalText = result[0].transcript.trim();
-	                if (finalText) rawBuffer += finalText;
-	            }
+                if (result.isFinal) {
+                    const finalText = result[0].transcript.trim();
+                    if (finalText) rawBuffer += finalText;
+                }
                 else {
                     interimTranscript += result[0].transcript;
-	            }
-	        }
+                }
+            }
         }
 
         // 発話を検知したので無音タイマーをリセット
@@ -106,16 +106,31 @@ if (SpeechRecognition) {
     };
 
     recognition.onerror = (event) => {
+        if (event.error === 'no-speech') {
+            // 無音タイムアウトは無視して継続（onendが来ないケースも手動で再起動）
+            console.log('no-speech: 再起動を試みます');
+            try {
+                recognition.stop(); // onend経由で再起動させる
+            } catch (e) { }
+            return;
+        }
+
+        // no-speech以外のエラーだけバッジに表示
         console.error("音声認識エラー:", event.error);
-        //  画面のバッジにエラー原因（aborted, network, not-allowed等）を直接出して見える化します
         statusBadge.textContent = 'エラー: ' + event.error;
         statusBadge.className = 'text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-sm';
     };
 
-    //  途中で勝手に切れてしまう対策（認識が終了したら自動で再起動する）
     recognition.onend = () => {
         if (statusBadge.textContent.includes('録音中')) {
-            recognition.start();
+            setTimeout(() => {
+                try {
+                    recognition.start();
+                } catch (e) {
+                    console.warn('再起動失敗、リトライします:', e);
+                    setTimeout(() => recognition.start(), 500);
+                }
+            }, 100);
         }
     };
 }
@@ -242,8 +257,27 @@ function stopGroqRecording() {
     if (isAdviceModeActive && getFullTranscript()) triggerAiAdvice();
 }
 
+const HALLUCINATION_PATTERNS = [
+    /^(はい[。、]?)+$/,
+    /ご視聴ありがとう/,
+    /字幕/,
+    /翻訳/,
+    /チャンネル登録/,
+    /ありがとうございました[。]?$/,
+    /^(うん[。、]?)+$/,
+    /^\s*$/,
+    /^私は日本語/,
+];
+
 async function sendToGroq(blob) {
-    if (blob.size < 1000) return; // 無音に近いチャンクは無視
+    if (blob.size < 3000) return;
+
+    const isSilent = await checkIfSilent(blob);
+    if (isSilent) {
+        console.log('無音チャンクをスキップ');
+        return;
+    }
+
     statusBadge.textContent = '録音中... (Groq変換中)';
     const formData = new FormData();
     formData.append('audio', blob, 'audio.webm');
@@ -255,8 +289,14 @@ async function sendToGroq(blob) {
         });
         const data = await response.json();
         if (response.ok && data.text) {
-            confirmedLines.push(data.text);
-            renderTranscript();
+            const trimmed = data.text.trim();
+            const isHallucination = HALLUCINATION_PATTERNS.some(p => p.test(trimmed));
+            if (!isHallucination) {
+                confirmedLines.push(trimmed);
+                renderTranscript();
+            } else {
+                console.log('幻覚テキストをフィルタ:', trimmed);
+            }
         }
     } catch (e) {
         console.warn('Groq transcribe error:', e);
@@ -264,6 +304,27 @@ async function sendToGroq(blob) {
         if (statusBadge.textContent.includes('変換中')) {
             statusBadge.textContent = '録音中... (Groq)';
         }
+    }
+}
+
+async function checkIfSilent(blob) {
+    try {
+        const arrayBuffer = await blob.arrayBuffer();
+        const audioCtx = new AudioContext();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        const channelData = audioBuffer.getChannelData(0);
+
+        let sum = 0;
+        for (let i = 0; i < channelData.length; i++) {
+            sum += channelData[i] * channelData[i];
+        }
+        const rms = Math.sqrt(sum / channelData.length);
+
+        audioCtx.close();
+        return rms < 0.01;
+    } catch (e) {
+        console.warn('音量チェック失敗:', e);
+        return false;
     }
 }
 
@@ -454,7 +515,7 @@ generateBtn.addEventListener('click', async () => {
             //summaryResult.classList.remove('hidden');
             window.location.reload();
         } else {
-	        const data = await response.json();
+            const data = await response.json();
             if (data.error && data.error.includes('503')) {
                 alert('【Google AI Studioからのお知らせ】\n現在、無料枠のAIサーバーが世界的に大変混み合っています。大変恐れ入りますが、数十秒ほど時間を空けてから、もう一度「議事録を生成」ボタンを押してください。');
             } else {
@@ -483,7 +544,7 @@ async function deleteMinute(minuteId) {
             // 削除成功時に画面を自動リロードしてリストを最新状態にする
             window.location.reload();
         } else {
-	        const data = await response.json();
+            const data = await response.json();
             alert('エラー: ' + data.error);
         }
     } catch (error) {
@@ -532,6 +593,6 @@ function closeHistoryModal() {
 
 document.getElementById('historyModal').addEventListener('click', (e) => {
     if (e.target === document.getElementById('historyModal')) {
-    	closeHistoryModal();
+        closeHistoryModal();
     }
 });
