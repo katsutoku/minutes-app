@@ -2,6 +2,11 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 let recognition = null;
 let isAdviceModeActive = false;
 
+// ----------------------------------------------------
+// 文字起こしモード: 'browser'=SpeechRecognition / 'groq'=Groq Whisper
+// ----------------------------------------------------
+let transcribeMode = 'browser';
+
 // 状態管理
 let rawBuffer = '';        // isFinalで確定したテキストの蓄積バッファ
 let confirmedLines = [];   // AIが完結と判定した発言の配列
@@ -9,6 +14,12 @@ let isSegmenting = false;  // API多重呼び出し防止フラグ
 let silenceTimer = null;   // 無音タイマー
 const SILENCE_MS = 2000;   // 無音判定の閾値（ミリ秒）
 let pendingSegmentText = ''; // AI解析中に消えないよう保持する一時テキスト
+
+// Groq Whisper用
+let mediaRecorder = null;
+let audioChunks = [];
+let chunkTimer = null;
+const CHUNK_MS = 5000; // 5秒ごとに音声を送信
 
 // UI要素の一括取得
 const startBtn = document.getElementById('startBtn');
@@ -26,6 +37,7 @@ const manualCheckBtn = document.getElementById('manualCheckBtn');
 const chatBox = document.getElementById('chatBox');
 const chatInput = document.getElementById('chatInput');
 const chatSendBtn = document.getElementById('chatSendBtn');
+const toggleModeBtn = document.getElementById('toggleModeBtn'); // 追加
 
 // アドバイスモード常時切り替えトグル
 toggleAdviceBtn.addEventListener('click', () => {
@@ -41,6 +53,26 @@ toggleAdviceBtn.addEventListener('click', () => {
         manualCheckBtn.classList.add('hidden');
     }
 });
+
+// 文字起こしモード切り替え
+toggleModeBtn.addEventListener('click', () => {
+    if (statusBadge.textContent.includes('録音中')) {
+        alert('録音中はモードを切り替えられません。録音を停止してから切り替えてください。');
+        return;
+    }
+    transcribeMode = (transcribeMode === 'browser') ? 'groq' : 'browser';
+    updateModeBtn();
+});
+
+function updateModeBtn() {
+    if (transcribeMode === 'groq') {
+        toggleModeBtn.textContent = '🎙️ Groq Whisper';
+        toggleModeBtn.className = 'bg-purple-500 text-white text-xs font-bold py-1.5 px-3 rounded transition shadow-xs cursor-pointer select-none';
+    } else {
+        toggleModeBtn.textContent = '🌐 ブラウザ認識';
+        toggleModeBtn.className = 'bg-blue-400 text-white text-xs font-bold py-1.5 px-3 rounded transition shadow-xs cursor-pointer select-none';
+    }
+}
 
 // 音声認識（Web Speech API）初期化
 if (SpeechRecognition) {
@@ -89,11 +121,7 @@ if (SpeechRecognition) {
 }
 
 // 録音開始ボタン
-startBtn.addEventListener('click', () => {
-    if (!recognition) {
-        alert("お使いのブラウザは音声認識に対応していません。Chrome等をお試しください。");
-        return;
-    }
+startBtn.addEventListener('click', async () => {
     // 最初にはじめるときに状態をリセット
     transcriptArea.value = '';
     rawBuffer = '';
@@ -102,27 +130,51 @@ startBtn.addEventListener('click', () => {
     clearTimeout(silenceTimer);
     silenceTimer = null;
 
-    try {
-        recognition.start();
-        startBtn.classList.add('hidden');
-        stopBtn.classList.remove('hidden');
-        statusBadge.textContent = '録音中...';
-        statusBadge.className = 'text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-sm';
-    } catch (e) {
-        console.log("すでに起動しています", e);
+    startBtn.classList.add('hidden');
+    stopBtn.classList.remove('hidden');
+
+    if (transcribeMode === 'groq') {
+        await startGroqRecording();
+    } else {
+        startBrowserRecognition();
     }
 });
 
 // 録音停止ボタン
 stopBtn.addEventListener('click', () => {
+    if (transcribeMode === 'groq') {
+        stopGroqRecording();
+    } else {
+        stopBrowserRecognition();
+    }
+});
+
+// -------------------------------------------------------
+// ブラウザ音声認識（SpeechRecognition）モード
+// -------------------------------------------------------
+function startBrowserRecognition() {
+    if (!recognition) {
+        alert("お使いのブラウザは音声認識に対応していません。Chrome等をお試しください。");
+        startBtn.classList.remove('hidden');
+        stopBtn.classList.add('hidden');
+        return;
+    }
+    try {
+        recognition.start();
+        statusBadge.textContent = '録音中...';
+        statusBadge.className = 'text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-sm';
+    } catch (e) {
+        console.log("すでに起動しています", e);
+    }
+}
+
+function stopBrowserRecognition() {
     if (!recognition) return;
-    // タイマーを止めて残バッファを最終処理
     clearTimeout(silenceTimer);
     silenceTimer = null;
     recognition.stop();
     stopBtn.classList.add('hidden');
     startBtn.classList.remove('hidden');
-    // 残バッファがあれば最終セグメント処理
     if (rawBuffer.trim()) {
         runSegment().then(() => {
             statusBadge.textContent = '停止中';
@@ -134,7 +186,86 @@ stopBtn.addEventListener('click', () => {
         statusBadge.className = 'text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-sm';
         if (isAdviceModeActive && getFullTranscript()) triggerAiAdvice();
     }
-});
+}
+
+// -------------------------------------------------------
+// Groq Whisper モード（MediaRecorder）
+// -------------------------------------------------------
+async function startGroqRecording() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunks.push(e.data);
+        };
+
+        // CHUNK_MS ごとに録音データをGroqへ送信
+        mediaRecorder.onstop = async () => {
+            if (audioChunks.length === 0) return;
+            const blob = new Blob(audioChunks, { type: 'audio/webm' });
+            audioChunks = [];
+            await sendToGroq(blob);
+        };
+
+        mediaRecorder.start();
+        statusBadge.textContent = '録音中... (Groq)';
+        statusBadge.className = 'text-[10px] bg-purple-100 text-purple-600 px-2 py-0.5 rounded-sm';
+
+        // CHUNK_MS ごとに区切って送信し続ける
+        chunkTimer = setInterval(() => {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                mediaRecorder.start();
+            }
+        }, CHUNK_MS);
+
+    } catch (e) {
+        alert('マイクへのアクセスが許可されていません: ' + e.message);
+        startBtn.classList.remove('hidden');
+        stopBtn.classList.add('hidden');
+    }
+}
+
+function stopGroqRecording() {
+    clearInterval(chunkTimer);
+    chunkTimer = null;
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop(); // 残った音声を最終送信
+        mediaRecorder.stream.getTracks().forEach(t => t.stop());
+    }
+    stopBtn.classList.add('hidden');
+    startBtn.classList.remove('hidden');
+    statusBadge.textContent = '停止中';
+    statusBadge.className = 'text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-sm';
+    if (isAdviceModeActive && getFullTranscript()) triggerAiAdvice();
+}
+
+async function sendToGroq(blob) {
+    if (blob.size < 1000) return; // 無音に近いチャンクは無視
+    statusBadge.textContent = '録音中... (Groq変換中)';
+    const formData = new FormData();
+    formData.append('audio', blob, 'audio.webm');
+
+    try {
+        const response = await fetch('/api/transcribe', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+        if (response.ok && data.text) {
+            confirmedLines.push(data.text);
+            renderTranscript();
+        }
+    } catch (e) {
+        console.warn('Groq transcribe error:', e);
+    } finally {
+        if (statusBadge.textContent.includes('変換中')) {
+            statusBadge.textContent = '録音中... (Groq)';
+        }
+    }
+}
 
 // -------------------------------------------------------
 // 無音検知・AI区切り処理
