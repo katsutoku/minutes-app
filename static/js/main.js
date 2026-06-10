@@ -137,13 +137,7 @@ if (SpeechRecognition) {
 
 // 録音開始ボタン
 startBtn.addEventListener('click', async () => {
-    // 最初にはじめるときに状態をリセット
-    transcriptArea.value = '';
-    rawBuffer = '';
-    confirmedLines = [];
-    isSegmenting = false;
-    clearTimeout(silenceTimer);
-    silenceTimer = null;
+    //会議中停止再生できるようにクリアはユーザー任意に変更
 
     startBtn.classList.add('hidden');
     stopBtn.classList.remove('hidden');
@@ -174,8 +168,16 @@ function startBrowserRecognition() {
         stopBtn.classList.add('hidden');
         return;
     }
+
+    // タイマー・フラグのみリセット（文字起こしは引き継ぐ）
+    isSegmenting = false;
+    clearTimeout(silenceTimer);
+    silenceTimer = null;
+
     try {
         recognition.start();
+        startBtn.classList.add('hidden');
+        stopBtn.classList.remove('hidden');
         statusBadge.textContent = '録音中...';
         statusBadge.className = 'text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-sm';
     } catch (e) {
@@ -256,6 +258,16 @@ function stopGroqRecording() {
     statusBadge.className = 'text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-sm';
     if (isAdviceModeActive && getFullTranscript()) triggerAiAdvice();
 }
+
+// 文字起こしクリアボタン
+document.getElementById('clearBtn').addEventListener('click', () => {
+    if (!confirm('文字起こしの内容をすべて消去しますか？')) return;
+    transcriptArea.value = '';
+    rawBuffer = '';
+    confirmedLines = [];
+    isSegmenting = false;
+    pendingSegmentText = '';
+});
 
 const HALLUCINATION_PATTERNS = [
     /^(はい[。、]?)+$/,

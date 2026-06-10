@@ -109,7 +109,12 @@
                 <section>
                     <h2 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 flex justify-between items-center">
                         <span>2. ライブ文字起こし</span>
+                        <div class="flex items-center gap-2">
+                            <button id="clearBtn" class="text-[10px] bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 font-bold py-0.5 px-2 rounded transition">
+                                🗑️ クリア
+                            </button>
                         <span id="statusBadge" class="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-sm">停止中</span>
+                        </div>
                     </h2>
                     <textarea id="transcriptArea" class="w-full h-24 p-3 border border-gray-300 rounded text-xs bg-gray-50 resize-none focus:outline-none" readonly></textarea>
                 </section>
