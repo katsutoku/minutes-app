@@ -37,27 +37,81 @@ const manualCheckBtn = document.getElementById('manualCheckBtn');
 const chatBox = document.getElementById('chatBox');
 const chatInput = document.getElementById('chatInput');
 const chatSendBtn = document.getElementById('chatSendBtn');
-const toggleModeBtn = document.getElementById('toggleModeBtn'); // 追加
+const toggleModeBtn = document.getElementById('toggleModeBtn');
+
+// -------------------------------------------------------
+// カスタムダイアログ（alert / confirm の置き換え）
+// -------------------------------------------------------
+function showAlert(message, { title = 'お知らせ', icon = 'ℹ️' } = {}) {
+    return new Promise((resolve) => {
+        const dialog = document.getElementById('customDialog');
+        document.getElementById('dialogIcon').textContent = icon;
+        document.getElementById('dialogTitle').textContent = title;
+        document.getElementById('dialogMessage').textContent = message;
+
+        const btns = document.getElementById('dialogButtons');
+        btns.innerHTML = '';
+        const ok = document.createElement('button');
+        ok.textContent = 'OK';
+        ok.className = 'bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-5 rounded transition';
+        ok.onclick = () => { dialog.classList.add('hidden'); resolve(); };
+        btns.appendChild(ok);
+
+        dialog.classList.remove('hidden');
+    });
+}
+
+function showConfirm(message, { title = '確認', icon = '⚠️', okLabel = 'OK', cancelLabel = 'キャンセル', okDanger = false } = {}) {
+    return new Promise((resolve) => {
+        const dialog = document.getElementById('customDialog');
+        document.getElementById('dialogIcon').textContent = icon;
+        document.getElementById('dialogTitle').textContent = title;
+        document.getElementById('dialogMessage').textContent = message;
+
+        const btns = document.getElementById('dialogButtons');
+        btns.innerHTML = '';
+
+        const cancel = document.createElement('button');
+        cancel.textContent = cancelLabel;
+        cancel.className = 'bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold py-2 px-4 rounded transition';
+        cancel.onclick = () => { dialog.classList.add('hidden'); resolve(false); };
+
+        const ok = document.createElement('button');
+        ok.textContent = okLabel;
+        ok.className = okDanger
+            ? 'bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-2 px-4 rounded transition'
+            : 'bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-4 rounded transition';
+        ok.onclick = () => { dialog.classList.add('hidden'); resolve(true); };
+
+        btns.appendChild(cancel);
+        btns.appendChild(ok);
+        dialog.classList.remove('hidden');
+    });
+}
 
 // アドバイスモード常時切り替えトグル
 toggleAdviceBtn.addEventListener('click', () => {
     isAdviceModeActive = !isAdviceModeActive;
+
+    // 共通クラスは固定、色だけ切り替える
+    const baseClass = 'text-white text-xs font-bold py-1.5 px-3 rounded transition shadow-xs cursor-pointer select-none';    
+    
     if (isAdviceModeActive) {
-        toggleAdviceBtn.textContent = '?? ON';
-        toggleAdviceBtn.className = 'bg-emerald-500 text-white text-xs font-bold py-1.5 px-3 rounded transition shadow-xs cursor-pointer select-none';
+        toggleAdviceBtn.textContent = '🔴 ON';
+        toggleAdviceBtn.className = baseClass + ' bg-red-500';
         manualCheckBtn.classList.remove('hidden');
-        appendChatMessage('ai', '????? 先輩:「アドバイスモードを有効にしたな。会議の前提に沿って見守っているぞ。」');
     } else {
-        toggleAdviceBtn.textContent = '?? OFF';
-        toggleAdviceBtn.className = 'bg-gray-400 text-white text-xs font-bold py-1.5 px-3 rounded transition shadow-xs cursor-pointer select-none';
+        toggleAdviceBtn.textContent = '🔴 OFF';
+        toggleAdviceBtn.className = baseClass + ' bg-gray-400';
         manualCheckBtn.classList.add('hidden');
     }
 });
 
 // 文字起こしモード切り替え
-toggleModeBtn.addEventListener('click', () => {
+toggleModeBtn.addEventListener('click', async () => {
     if (statusBadge.textContent.includes('録音中')) {
-        alert('録音中はモードを切り替えられません。録音を停止してから切り替えてください。');
+        // alert('録音中はモードを切り替えられません。録音を停止してから切り替えてください。');
+        await showAlert('録音を停止してから切り替えてください。', { title: '録音中は切替できません', icon: '🎙️' });
         return;
     }
     transcribeMode = (transcribeMode === 'browser') ? 'groq' : 'browser';
@@ -161,9 +215,10 @@ stopBtn.addEventListener('click', () => {
 // -------------------------------------------------------
 // ブラウザ音声認識（SpeechRecognition）モード
 // -------------------------------------------------------
-function startBrowserRecognition() {
+async function startBrowserRecognition() {
     if (!recognition) {
-        alert("お使いのブラウザは音声認識に対応していません。Chrome等をお試しください。");
+        // alert("お使いのブラウザは音声認識に対応していません。Chrome等をお試しください。");
+        await showAlert('Chrome等のブラウザをお試しください。', { title: 'このブラウザは音声認識に未対応です', icon: '🚫' });
         startBtn.classList.remove('hidden');
         stopBtn.classList.add('hidden');
         return;
@@ -239,7 +294,8 @@ async function startGroqRecording() {
         }, CHUNK_MS);
 
     } catch (e) {
-        alert('マイクへのアクセスが許可されていません: ' + e.message);
+        // alert('マイクへのアクセスが許可されていません: ' + e.message);
+        await showAlert('マイクへのアクセスが許可されていません。\n' + e.message, { title: 'マイクエラー', icon: '🚫' });
         startBtn.classList.remove('hidden');
         stopBtn.classList.add('hidden');
     }
@@ -260,8 +316,13 @@ function stopGroqRecording() {
 }
 
 // 文字起こしクリアボタン
-document.getElementById('clearBtn').addEventListener('click', () => {
-    if (!confirm('文字起こしの内容をすべて消去しますか？')) return;
+document.getElementById('clearBtn').addEventListener('click', async () => {
+    // if (!confirm('文字起こしの内容をすべて消去しますか？')) return;
+    const ok = await showConfirm('文字起こしの内容をすべて消去しますか？', {
+        title: 'クリアの確認', icon: '🗑️', okLabel: '消去する', okDanger: true
+    });
+    if (!ok) return;
+
     transcriptArea.value = '';
     rawBuffer = '';
     confirmedLines = [];
@@ -444,7 +505,7 @@ async function triggerAiAdvice() {
         });
         const data = await response.json();
         document.getElementById(loadId).remove();
-        if (response.ok) appendChatMessage('ai', '????? 先輩からの助言:\n' + data.reply);
+        if (response.ok) appendChatMessage('ai', '先輩からの助言:\n' + data.reply);
         else appendChatMessage('ai', '診断エラー: ' + data.error);
     } catch (error) {
         document.getElementById(loadId).remove();
@@ -508,7 +569,8 @@ generateBtn.addEventListener('click', async () => {
     const title = sessionTitle.value.trim() || '定例ミーティング';
 
     if (!text) {
-        alert('文字起こしされたテキストがありません。テキストエリアに直接文字入力を入力してテストすることも可能です。');
+        // alert('文字起こしされたテキストがありません。テキストエリアに直接文字入力を入力してテストすることも可能です。');
+        await showAlert('文字起こしされたテキストがありません。テキストエリアに直接入力してテストすることも可能です。', { title: 'テキストがありません', icon: '📝' });
         return;
     }
 
@@ -529,9 +591,11 @@ generateBtn.addEventListener('click', async () => {
         } else {
             const data = await response.json();
             if (data.error && data.error.includes('503')) {
-                alert('【Google AI Studioからのお知らせ】\n現在、無料枠のAIサーバーが世界的に大変混み合っています。大変恐れ入りますが、数十秒ほど時間を空けてから、もう一度「議事録を生成」ボタンを押してください。');
+                // alert('【Google AI Studioからのお知らせ】\n現在、無料枠のAIサーバーが世界的に大変混み合っています。大変恐れ入りますが、数十秒ほど時間を空けてから、もう一度「議事録を生成」ボタンを押してください。');
+                await showAlert('現在、無料枠のAIサーバーが混み合っています。数十秒後に再度お試しください。', { title: 'AIサーバーが混雑中', icon: '⏳' });
             } else {
-                alert('エラー: ' + data.error);
+                // alert('エラー: ' + data.error);
+                await showAlert(data.error, { title: 'エラーが発生しました', icon: '❌' });
             }
         }
     } catch (error) {
@@ -544,7 +608,11 @@ generateBtn.addEventListener('click', async () => {
 
 // 議事録の非同期削除処理
 async function deleteMinute(minuteId) {
-    if (!confirm('この議事録を完全に削除してもよろしいですか？\n(この操作は取り消せません)')) return;
+    // if (!confirm('この議事録を完全に削除してもよろしいですか？\n(この操作は取り消せません)')) return;
+    const ok = await showConfirm('この操作は取り消せません。', {
+        title: 'この議事録を削除しますか？', icon: '🗑️', okLabel: '削除する', okDanger: true
+    });
+    if (!ok) return;
 
     try {
         const response = await fetch(`/api/minutes/${minuteId}`, {
@@ -557,7 +625,8 @@ async function deleteMinute(minuteId) {
             window.location.reload();
         } else {
             const data = await response.json();
-            alert('エラー: ' + data.error);
+            // alert('エラー: ' + data.error);
+            await showAlert(data.error, { title: 'エラーが発生しました', icon: '❌' });
         }
     } catch (error) {
         alert('削除通信中にエラーが発生しました。');

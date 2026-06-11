@@ -1,15 +1,18 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ミーティング議事録Lite</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 </head>
+
 <body class="bg-blue-50 min-h-screen p-4 md:p-6 font-sans">
 
     <!--  ヘッダーエリア -->
-    <header class="max-w-5xl mx-auto flex justify-between items-center mb-6 bg-white p-4 rounded-lg shadow-xs border border-gray-100">
+    <header
+        class="max-w-5xl mx-auto flex justify-between items-center mb-6 bg-white p-4 rounded-lg shadow-xs border border-gray-100">
         <h1 class="text-lg font-bold text-gray-800 flex items-center gap-2">
             🎙️ ミーティング議事録Lite
         </h1>
@@ -17,7 +20,8 @@
             <span class="text-xs text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full">
                 👤 ユーザー: <strong>{{ current_user.username }}</strong>
             </span>
-            <a href="/logout" class="text-xs bg-red-50 hover:bg-red-100 text-red-600 font-bold py-1.5 px-3 rounded border border-red-200 transition">
+            <a href="/logout"
+                class="text-xs bg-red-50 hover:bg-red-100 text-red-600 font-bold py-1.5 px-3 rounded border border-red-200 transition">
                 ログアウト
             </a>
         </div>
@@ -25,7 +29,7 @@
 
     <!--  メインコンテンツ（2カラム構成） -->
     <main class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
-        
+
         <!--  左側カラム：過去の議事録履歴 -->
         <div class="bg-white rounded-lg shadow-md p-4 border border-gray-100 h-[650px] flex flex-col">
             <h2 class="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1 border-b border-gray-100 pb-2">
@@ -33,41 +37,45 @@
             </h2>
             <div class="overflow-y-auto flex-1 space-y-2 pr-1" id="historyList">
                 {% if minutes %}
-                    {% for item in minutes %}
-                    <div class="relative group w-full mb-2">
-                        <button class="w-full text-left p-3 pr-10 rounded-lg border border-gray-200 hover:bg-blue-50/50 hover:border-blue-300 transition text-xs block"
-                                onclick="showHistoryModal('{{ item.title|e }}', '{{ item.created_at.strftime('%Y/%m/%d %H:%M') }}', `{{ item.summary|e }}`, `{{ item.transcript|e }}`)">
-                            <div class="font-bold text-gray-800 truncate group-hover:text-blue-600">{{ item.title }}</div>
-                            <div class="text-gray-400 mt-1 text-[10px]">{{ item.created_at.strftime('%Y/%m/%d %H:%M') }}</div>
-                        </button>
-                        <button onclick="event.stopPropagation(); deleteMinute({{ item.id }})" 
-                                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 text-sm p-1 transition cursor-pointer"
-                                title="削除する">
-                            🗑️
-                        </button>
-                    </div>
-                    {% endfor %}
+                {% for item in minutes %}
+                <div class="relative group w-full mb-2">
+                    <button
+                        class="w-full text-left p-3 pr-10 rounded-lg border border-gray-200 hover:bg-blue-50/50 hover:border-blue-300 transition text-xs block"
+                        onclick="showHistoryModal('{{ item.title|e }}', '{{ item.created_at.strftime('%Y/%m/%d %H:%M') }}', `{{ item.summary|e }}`, `{{ item.transcript|e }}`)">
+                        <div class="font-bold text-gray-800 truncate group-hover:text-blue-600">{{ item.title }}</div>
+                        <div class="text-gray-400 mt-1 text-[10px]">{{ item.created_at.strftime('%Y/%m/%d %H:%M') }}
+                        </div>
+                    </button>
+                    <button onclick="event.stopPropagation(); deleteMinute({{ item.id }})"
+                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 text-sm p-1 transition cursor-pointer"
+                        title="削除する">
+                        🗑️
+                    </button>
+                </div>
+                {% endfor %}
                 {% else %}
-                    <p class="text-gray-400 text-xs text-center pt-8">履歴はまだありません</p>
+                <p class="text-gray-400 text-xs text-center pt-8">履歴はまだありません</p>
                 {% endif %}
             </div>
         </div>
 
         <!--  右側カラム：メイン操作エリア -->
-        <div class="md:col-span-2 bg-white rounded-lg shadow-md p-6 border border-gray-100 flex flex-col justify-between h-[650px]">
+        <div
+            class="md:col-span-2 bg-white rounded-lg shadow-md p-6 border border-gray-100 flex flex-col justify-between h-[650px]">
             <div class="space-y-4">
                 <!-- 1. 新規セッション開始 -->
                 <section>
                     <h2 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">1. 新規セッション開始</h2>
-                    <input type="text" id="sessionTitle" placeholder="セッション・タイトル：例. A社会議" 
-                           class="w-full p-2 border border-gray-300 rounded text-xs focus:outline-blue-500 mb-2">
-                    <input type="text" id="meetingGoal" placeholder="この会議の目的・着地点：例. 予算100万以内での納期確定、安易に即答しない" 
-                           class="w-full p-2 border border-gray-300 rounded text-xs focus:outline-blue-500 mb-2">
-                    
+                    <input type="text" id="sessionTitle" placeholder="セッション・タイトル：例. A社会議"
+                        class="w-full p-2 border border-gray-300 rounded text-xs focus:outline-blue-500 mb-2">
+                    <input type="text" id="meetingGoal" placeholder="この会議の目的・着地点：例. 予算100万以内での納期確定、安易に即答しない"
+                        class="w-full p-2 border border-gray-300 rounded text-xs focus:outline-blue-500 mb-2">
+
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
                         <div>
                             <label class="text-[10px] font-bold text-gray-500 block mb-0.5">会議の種類</label>
-                            <select id="meetingType" class="w-full p-2 border border-gray-300 rounded text-xs bg-white focus:outline-blue-500">
+                            <select id="meetingType"
+                                class="w-full p-2 border border-gray-300 rounded text-xs bg-white focus:outline-blue-500">
                                 <option value="対外打ち合わせ（顧客・クライアント）">対外打ち合わせ（クライアント）</option>
                                 <option value="パートナー・協力企業との折衝">協力企業との折衝</option>
                                 <option value="社内ミーティング・要件定義">社内ミーティング</option>
@@ -75,30 +83,35 @@
                         </div>
                         <div>
                             <label class="text-[10px] font-bold text-gray-500 block mb-0.5">参加者構成</label>
-                            <input type="text" id="meetingParticipants" placeholder="例: 弊社メンバー、クライアント、協力企業" 
-                                   class="w-full p-2 border border-gray-300 rounded text-xs focus:outline-blue-500">
+                            <input type="text" id="meetingParticipants" placeholder="例: 弊社メンバー、クライアント、協力企業"
+                                class="w-full p-2 border border-gray-300 rounded text-xs focus:outline-blue-500">
                         </div>
                     </div>
 
                     <!--  録音ボタン ＆ 常時切り替え可能なアドバイスモードトグルボタン -->
-                    <div class="flex flex-wrap items-center justify-between gap-2 bg-gray-50 p-2 rounded-lg border border-gray-200">
+                    <div
+                        class="flex flex-wrap items-center justify-between gap-2 bg-gray-50 p-2 rounded-lg border border-gray-200">
                         <div class="flex gap-2">
-                            <button id="startBtn" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-4 rounded transition shadow-xs">
+                            <button id="startBtn"
+                                class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-4 rounded transition shadow-xs">
                                 録音開始 (マイク)
                             </button>
-                            <button id="stopBtn" class="bg-gray-500 hover:bg-gray-600 text-white text-xs font-bold py-2 px-4 rounded transition hidden shadow-xs">
+                            <button id="stopBtn"
+                                class="bg-gray-500 hover:bg-gray-600 text-white text-xs font-bold py-2 px-4 rounded transition hidden shadow-xs">
                                 録音停止
                             </button>
                         </div>
-                        
+
                         <div class="flex items-center gap-2">
                             <!-- 文字起こしモード切り替え -->
-                            <button id="toggleModeBtn" class="bg-blue-400 text-white text-xs font-bold py-1.5 px-3 rounded transition shadow-xs cursor-pointer select-none">
+                            <button id="toggleModeBtn"
+                                class="bg-blue-400 text-white text-xs font-bold py-1.5 px-3 rounded transition shadow-xs cursor-pointer select-none">
                                 🌐 ブラウザ認識
                             </button>
                             <!-- アドバイスモード -->
                             <span class="text-[11px] font-bold text-gray-600">先輩アドバイス:</span>
-                            <button id="toggleAdviceBtn" class="bg-gray-400 text-white text-xs font-bold py-1.5 px-3 rounded transition shadow-xs cursor-pointer select-none">
+                            <button id="toggleAdviceBtn"
+                                class="bg-gray-400 text-white text-xs font-bold py-1.5 px-3 rounded transition shadow-xs cursor-pointer select-none">
                                 🔴 OFF
                             </button>
                         </div>
@@ -107,36 +120,45 @@
 
                 <!-- 2. ライブ文字起こし -->
                 <section>
-                    <h2 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 flex justify-between items-center">
+                    <h2
+                        class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 flex justify-between items-center">
                         <span>2. ライブ文字起こし</span>
                         <div class="flex items-center gap-2">
-                            <button id="clearBtn" class="text-[10px] bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 font-bold py-0.5 px-2 rounded transition">
+                            <button id="clearBtn"
+                                class="text-[10px] bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 font-bold py-0.5 px-2 rounded transition">
                                 🗑️ クリア
                             </button>
-                        <span id="statusBadge" class="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-sm">停止中</span>
+                            <span id="statusBadge"
+                                class="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-sm">停止中</span>
                         </div>
                     </h2>
-                    <textarea id="transcriptArea" class="w-full h-24 p-3 border border-gray-300 rounded text-xs bg-gray-50 resize-none focus:outline-none" readonly></textarea>
+                    <textarea id="transcriptArea"
+                        class="w-full h-24 p-3 border border-gray-300 rounded text-xs bg-gray-50 resize-none focus:outline-none"
+                        readonly></textarea>
                 </section>
             </div>
 
             <!--  AIミーティングアシスタント（チャット・アドバイス窓） -->
             <section class="border-t border-gray-100 pt-3">
-                <h2 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex justify-between items-center">
+                <h2
+                    class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex justify-between items-center">
                     <span>🤖 AI先輩のアドバイス・チャット</span>
-                    <button id="manualCheckBtn" class="text-[10px] bg-amber-500 hover:bg-amber-600 text-white py-1 px-2 rounded hidden transition">
+                    <button id="manualCheckBtn"
+                        class="text-[10px] bg-amber-500 hover:bg-amber-600 text-white py-1 px-2 rounded hidden transition">
                         ⚡ 今すぐ進行チェック
                     </button>
                 </h2>
-                
-                <div id="chatBox" class="w-full h-28 p-3 border border-gray-200 bg-gray-50 rounded text-xs overflow-y-auto space-y-2 mb-2">
+
+                <div id="chatBox"
+                    class="w-full h-28 p-3 border border-gray-200 bg-gray-50 rounded text-xs overflow-y-auto space-y-2 mb-2">
                     <div class="text-gray-400 text-center pt-2 italic">アドバイスモードをONにすると、会議中のリスクを先輩がここに警告します。</div>
                 </div>
 
                 <div class="flex gap-2">
-                    <input type="text" id="chatInput" placeholder="先輩に個別に質問を入力..." 
-                           class="flex-1 p-2 border border-gray-300 rounded text-xs focus:outline-blue-500">
-                    <button id="chatSendBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded text-xs transition shadow-xs">
+                    <input type="text" id="chatInput" placeholder="先輩に個別に質問を入力..."
+                        class="flex-1 p-2 border border-gray-300 rounded text-xs focus:outline-blue-500">
+                    <button id="chatSendBtn"
+                        class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded text-xs transition shadow-xs">
                         質問
                     </button>
                 </div>
@@ -144,10 +166,13 @@
 
             <!-- 3. クイック議事録生成（最下部に固定） -->
             <section class="border-t border-gray-100 pt-3">
-                <button id="generateBtn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded text-xs transition shadow-xs">
+                <button id="generateBtn"
+                    class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded text-xs transition shadow-xs">
                     議事録を生成して履歴に保存
                 </button>
-                <div id="summaryResult" class="mt-2 p-3 bg-amber-50 border border-amber-200 rounded text-xs text-gray-800 h-20 overflow-y-auto whitespace-pre-wrap hidden"></div>
+                <div id="summaryResult"
+                    class="mt-2 p-3 bg-amber-50 border border-amber-200 rounded text-xs text-gray-800 h-20 overflow-y-auto whitespace-pre-wrap hidden">
+                </div>
             </section>
         </div>
     </main>
@@ -161,19 +186,36 @@
                     <h3 id="modalTitle" class="text-base font-bold text-gray-800"></h3>
                     <p id="modalDate" class="text-[10px] text-gray-400 mt-0.5"></p>
                 </div>
-                <button onclick="closeHistoryModal()" class="text-gray-400 hover:text-gray-600 font-bold text-lg px-2 cursor-pointer">&times;</button>
+                <button onclick="closeHistoryModal()"
+                    class="text-gray-400 hover:text-gray-600 font-bold text-lg px-2 cursor-pointer">&times;</button>
             </div>
             <!-- モーダルコンテンツ -->
             <div class="overflow-y-auto flex-1 space-y-4 text-xs pr-1">
                 <div>
                     <h4 class="font-bold text-blue-600 mb-1">✨ AI生成議事録</h4>
-                    <div id="modalSummary" class="bg-amber-50 p-3 rounded border border-amber-100 whitespace-pre-wrap text-gray-800"></div>
+                    <div id="modalSummary"
+                        class="bg-amber-50 p-3 rounded border border-amber-100 whitespace-pre-wrap text-gray-800"></div>
                 </div>
                 <div>
                     <h4 class="font-bold text-gray-500 mb-1">📝 文字起こし原文</h4>
-                    <div id="modalTranscript" class="bg-gray-50 p-3 rounded border border-gray-200 whitespace-pre-wrap text-gray-600 max-h-40 overflow-y-auto"></div>
+                    <div id="modalTranscript"
+                        class="bg-gray-50 p-3 rounded border border-gray-200 whitespace-pre-wrap text-gray-600 max-h-40 overflow-y-auto">
+                    </div>
                 </div>
             </div>
+        </div>
+    </div>
+    <!-- カスタムダイアログ -->
+    <div id="customDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 hidden z-[60]">
+        <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
+            <div class="flex items-start gap-3 mb-4">
+                <span id="dialogIcon" class="text-xl mt-0.5"></span>
+                <div class="flex-1">
+                    <p id="dialogTitle" class="text-sm font-bold text-gray-800 mb-1"></p>
+                    <p id="dialogMessage" class="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap"></p>
+                </div>
+            </div>
+            <div id="dialogButtons" class="flex gap-2 justify-end"></div>
         </div>
     </div>
     <!-- JavaScriptロジック -->
