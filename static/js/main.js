@@ -94,7 +94,7 @@ toggleAdviceBtn.addEventListener('click', () => {
     isAdviceModeActive = !isAdviceModeActive;
 
     // 共通クラスは固定、色だけ切り替える
-    const baseClass = 'text-white text-xs font-bold py-1.5 px-3 rounded transition shadow-xs cursor-pointer select-none';    
+    const baseClass = 'text-white text-xs font-bold py-1.5 px-3 rounded transition shadow-xs cursor-pointer select-none w-20 text-center';    
     
     if (isAdviceModeActive) {
         toggleAdviceBtn.textContent = '🔴 ON';
