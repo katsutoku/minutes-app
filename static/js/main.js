@@ -94,8 +94,8 @@ toggleAdviceBtn.addEventListener('click', () => {
     isAdviceModeActive = !isAdviceModeActive;
 
     // 共通クラスは固定、色だけ切り替える
-    const baseClass = 'text-white text-xs font-bold py-1.5 px-3 rounded transition shadow-xs cursor-pointer select-none w-20 text-center';    
-    
+    const baseClass = 'text-white text-xs font-bold py-1.5 px-3 rounded transition shadow-xs cursor-pointer select-none w-20 text-center';
+
     if (isAdviceModeActive) {
         toggleAdviceBtn.textContent = '🔴 ON';
         toggleAdviceBtn.className = baseClass + ' bg-red-500';
@@ -475,6 +475,14 @@ function renderTranscript(interimText = '') {
     console.log("  pendingSegmentText：" + pendingSegmentText+"\n");
     console.log("  interimText：" + (interimText ? interimText:"")+"\n");
     */
+
+    // 追加：確定済みデータをlocalStorageに永続化
+    localStorage.setItem('draft_confirmedLines', JSON.stringify(confirmedLines));
+    localStorage.setItem('draft_sessionTitle', sessionTitle.value);
+    localStorage.setItem('draft_savedAt', new Date().toISOString());
+    localStorage.setItem('draft_participants', meetingParticipants.value);
+    localStorage.setItem('draft_goal', meetingGoal.value);
+    localStorage.setItem('draft_type', meetingType.value);
 }
 
 // 確定済み + バッファ中のテキストを結合して返す
@@ -587,6 +595,13 @@ generateBtn.addEventListener('click', async () => {
         if (response.ok) {
             //summaryResult.textContent = data.summary;
             //summaryResult.classList.remove('hidden');
+            isSaving = true; // reload時の警告無効化の判定のため
+            localStorage.removeItem('draft_confirmedLines');
+            localStorage.removeItem('draft_savedAt');
+            localStorage.removeItem('draft_sessionTitle');
+            localStorage.removeItem('draft_participants');
+            localStorage.removeItem('draft_goal');
+            localStorage.removeItem('draft_type');
             window.location.reload();
         } else {
             const data = await response.json();
@@ -677,3 +692,46 @@ document.getElementById('historyModal').addEventListener('click', (e) => {
         closeHistoryModal();
     }
 });
+
+window.addEventListener('beforeunload', (e) => {
+    if (isSaving) return; //  保存中は警告をスキップ
+
+    // 録音中 or 文字起こしデータがある場合のみ警告
+    if (confirmedLines.length > 0 || rawBuffer.trim()) {
+        e.preventDefault();
+        e.returnValue = ''; // Chrome では文字列は無視されるが必須
+    }
+});
+
+// 起動時：下書きが残っていれば復元
+// 重要：DOM読み込みの都合上、必ずmain.jsの末尾に記述
+(async function restoreDraft() {
+    const saved = localStorage.getItem('draft_confirmedLines');
+    const savedAt = localStorage.getItem('draft_savedAt');
+    if (!saved) return;
+
+    const lines = JSON.parse(saved);
+    if (lines.length === 0) return;
+
+    const date = new Date(savedAt).toLocaleString('ja-JP');
+    const ok = await showConfirm(
+        `${date} の未保存の文字起こし（${lines.length}件）が見つかりました。復元しますか？`,
+        { title: '下書きの復元', icon: '💾', okLabel: '復元する' }
+    );
+
+    if (ok) {
+        confirmedLines = lines;
+        sessionTitle.value = localStorage.getItem('draft_sessionTitle') || '';
+        meetingParticipants.value = localStorage.getItem('draft_participants');
+        meetingGoal.value = localStorage.getItem('draft_goal');
+        meetingType.value = localStorage.getItem('draft_type');
+        renderTranscript();
+    } else {
+        localStorage.removeItem('draft_confirmedLines');
+        localStorage.removeItem('draft_savedAt');
+        localStorage.removeItem('draft_sessionTitle');
+        localStorage.removeItem('draft_participants');
+        localStorage.removeItem('draft_goal');
+        localStorage.removeItem('draft_type');
+    }
+})();
