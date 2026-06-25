@@ -15,6 +15,30 @@ let silenceTimer = null;   // 無音タイマー
 const SILENCE_MS = 2000;   // 無音判定の閾値（ミリ秒）
 let pendingSegmentText = ''; // AI解析中に消えないよう保持する一時テキスト
 
+// -------------------------------------------------------
+// 編集モード制御
+// -------------------------------------------------------
+// 録音開始前に、ユーザーが手動編集した内容をconfirmedLinesへ同期する
+function syncEditedTranscript() {
+    const edited = transcriptArea.value.trim();
+    if (edited) {
+        confirmedLines = edited.split('\n').filter(Boolean);
+    }
+    rawBuffer = '';
+    pendingSegmentText = '';
+}
+
+function setTranscriptEditable(enabled) {
+    transcriptArea.disabled = !enabled;
+    if (enabled) {
+        transcriptArea.className = 'w-full h-24 p-3 border border-blue-300 rounded text-xs bg-white resize-none focus:outline-blue-500 cursor-text';
+        transcriptArea.placeholder = '直接テキストを編集できます';
+    } else {
+        transcriptArea.className = 'w-full h-24 p-3 border border-gray-300 rounded text-xs bg-gray-100 resize-none focus:outline-none cursor-not-allowed';
+        transcriptArea.placeholder = '録音を停止すると編集できます';
+    }
+}
+
 // Groq Whisper用
 let mediaRecorder = null;
 let audioChunks = [];
@@ -225,6 +249,8 @@ async function startBrowserRecognition() {
     }
 
     // タイマー・フラグのみリセット（文字起こしは引き継ぐ）
+    syncEditedTranscript();
+    setTranscriptEditable(false);
     isSegmenting = false;
     clearTimeout(silenceTimer);
     silenceTimer = null;
@@ -251,11 +277,13 @@ function stopBrowserRecognition() {
         runSegment().then(() => {
             statusBadge.textContent = '停止中';
             statusBadge.className = 'text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-sm';
+            setTranscriptEditable(true);
             if (isAdviceModeActive && getFullTranscript()) triggerAiAdvice();
         });
     } else {
         statusBadge.textContent = '停止中';
         statusBadge.className = 'text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-sm';
+        setTranscriptEditable(true);
         if (isAdviceModeActive && getFullTranscript()) triggerAiAdvice();
     }
 }
@@ -265,6 +293,8 @@ function stopBrowserRecognition() {
 // -------------------------------------------------------
 async function startGroqRecording() {
     try {
+        syncEditedTranscript();
+        setTranscriptEditable(false);
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
         audioChunks = [];
@@ -312,6 +342,7 @@ function stopGroqRecording() {
     startBtn.classList.remove('hidden');
     statusBadge.textContent = '停止中';
     statusBadge.className = 'text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-sm';
+    setTranscriptEditable(true);
     if (isAdviceModeActive && getFullTranscript()) triggerAiAdvice();
 }
 
@@ -726,6 +757,7 @@ window.addEventListener('beforeunload', (e) => {
         meetingGoal.value = localStorage.getItem('draft_goal');
         meetingType.value = localStorage.getItem('draft_type');
         renderTranscript();
+        setTranscriptEditable(true);
     } else {
         localStorage.removeItem('draft_confirmedLines');
         localStorage.removeItem('draft_savedAt');
