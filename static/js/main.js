@@ -705,13 +705,86 @@ function appendChatMessage(sender, text) {
     return uniqueId; // ローディング消去用にIDを返す
 }
 
+let currentEditingId = null;
+
 // モーダル表示制御
-function showHistoryModal(title, date, summary, transcript) {
+function showHistoryModal(id, title, date, summary, transcript) {
+    currentEditingId = id;
     document.getElementById('modalTitle').textContent = title;
     document.getElementById('modalDate').textContent = "作成日時: " + date;
     document.getElementById('modalSummary').textContent = summary;
     document.getElementById('modalTranscript').textContent = transcript;
     document.getElementById('historyModal').classList.remove('hidden');
+
+    setModalEditMode(false); // 最初は読み取りモード
+}
+
+function setModalEditMode(enabled) {
+    const transcriptEl = document.getElementById('modalTranscript');
+    const editBtn = document.getElementById('modalEditBtn');
+    const actionBtns = document.getElementById('modalActionBtns');
+
+    // 共通スタイル（最低高さ・パディングは両モードで維持）
+    const base = 'whitespace-pre-wrap text-gray-600 rounded border p-4 min-h-[100px] overflow-y-auto';
+
+    if (enabled) {
+        transcriptEl.contentEditable = 'true';
+        transcriptEl.className = base + ' border-blue-300 bg-white cursor-text focus:outline-none';
+        editBtn.classList.add('hidden');
+        actionBtns.classList.remove('hidden');
+    } else {
+        transcriptEl.contentEditable = 'false';
+        transcriptEl.className = base + ' border-gray-200 bg-gray-50 cursor-default max-h-60';
+        editBtn.classList.remove('hidden');
+        actionBtns.classList.add('hidden');
+    }
+}
+
+async function saveMinute(regenerate) {
+    const newTranscript = document.getElementById('modalTranscript').textContent;
+    const btn = regenerate
+        ? document.getElementById('resummaryBtn')
+        : document.getElementById('saveOnlyBtn');
+    btn.textContent = '処理中...';
+    btn.disabled = true;
+
+    try {
+        const res = await fetch(`/api/minutes/${currentEditingId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ transcript: newTranscript, regenerate })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+            // モーダル内の表示を更新
+            if (regenerate) {
+                document.getElementById('modalSummary').textContent = data.summary;
+            }
+            document.getElementById('modalTranscript').textContent = data.transcript;
+
+            // 履歴ボタンの onclick も新しい内容で書き換え（再クリック時に古いデータが渡らないように）
+            const historyBtn = document.querySelector(`button[onclick*="showHistoryModal('${currentEditingId}'"]`);
+            if (historyBtn) {
+                const title = document.getElementById('modalTitle').textContent;
+                const date = document.getElementById('modalDate').textContent.replace('作成日時: ', '');
+                const newSummary = data.summary.replace(/`/g, '\\`').replace(/\\/g, '\\\\');
+                const newTrans = data.transcript.replace(/`/g, '\\`').replace(/\\/g, '\\\\');
+                historyBtn.setAttribute('onclick',
+                    `showHistoryModal('${currentEditingId}', '${title.replace(/'/g, "\\'")}', '${date}', \`${newSummary}\`, \`${newTrans}\`)`
+                );
+            }
+
+            setModalEditMode(false);
+        } else {
+            await showAlert(data.error || 'エラーが発生しました', { title: 'エラー', icon: '❌' });
+        }
+    } catch (e) {
+        await showAlert('通信エラーが発生しました。', { title: 'エラー', icon: '❌' });
+    } finally {
+        btn.textContent = regenerate ? '🔄 再要約して保存' : '💾 保存のみ';
+        btn.disabled = false;
+    }
 }
 
 function closeHistoryModal() {

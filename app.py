@@ -301,6 +301,37 @@ def segment():
         # パース失敗時はテキスト全体を1件の完結発言として返す
         return jsonify({"completed": [text]})
 
+@app.route('/api/minutes/<int:minute_id>', methods=['PUT'])
+@login_required
+def update_minute(minute_id):
+    minute = Minute.query.get_or_404(minute_id)
+    if minute.user_id != current_user.id:
+        return jsonify({"error": "権限がありません"}), 403
+
+    data = request.json
+    new_transcript = data.get('transcript', minute.transcript)
+    regenerate = data.get('regenerate', False)
+
+    minute.transcript = new_transcript
+
+    if regenerate:
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=f"会議タイトル: {minute.title}\n\n発言内容:\n{new_transcript}",
+                config=genai.types.GenerateContentConfig(
+                    system_instruction="あなたは優秀な書記です。提供された対話テキストから、決定事項、重要なポイント、ネクストアクションを整理した綺麗な議事録を作成してください。",
+                    temperature=0.5,
+                ),
+            )
+            minute.summary = response.text
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"error": str(e)}), 500
+
+    db.session.commit()
+    return jsonify({"summary": minute.summary, "transcript": minute.transcript})
+##
 
 if __name__ == "__main__":
     app.run(debug=True)
